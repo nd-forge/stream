@@ -9,11 +9,11 @@ import (
 
 // --- Data types ---
 
-type Trade struct {
-	Symbol string
-	Amount float64
-	PnL    float64
-	IsOpen bool
+type Product struct {
+	Name     string
+	Category string
+	Price    float64
+	InStock  bool
 }
 
 type User struct {
@@ -45,23 +45,22 @@ func main() {
 	// ===== Filter, Sort, Take =====
 	fmt.Println("\n=== Filter + Sort + Take ===")
 
-	trades := stream.Of(
-		Trade{Symbol: "AUDUSD", Amount: 10000, PnL: 150, IsOpen: false},
-		Trade{Symbol: "NZDUSD", Amount: 5000, PnL: -80, IsOpen: false},
-		Trade{Symbol: "AUDUSD", Amount: 20000, PnL: 300, IsOpen: true},
-		Trade{Symbol: "EURUSD", Amount: 15000, PnL: -200, IsOpen: false},
-		Trade{Symbol: "AUDUSD", Amount: 8000, PnL: 50, IsOpen: false},
-		Trade{Symbol: "NZDUSD", Amount: 12000, PnL: 100, IsOpen: false},
+	products := stream.Of(
+		Product{Name: "Laptop", Category: "Electronics", Price: 1200, InStock: true},
+		Product{Name: "T-Shirt", Category: "Clothing", Price: 25, InStock: true},
+		Product{Name: "Headphones", Category: "Electronics", Price: 150, InStock: false},
+		Product{Name: "Jeans", Category: "Clothing", Price: 80, InStock: true},
+		Product{Name: "Keyboard", Category: "Electronics", Price: 75, InStock: true},
+		Product{Name: "Sneakers", Category: "Clothing", Price: 120, InStock: false},
 	)
 
-	top3 := trades.
-		Filter(func(t Trade) bool { return !t.IsOpen }).
-		Filter(func(t Trade) bool { return t.PnL > 0 }).
-		Sort(func(a, b Trade) int {
-			if a.PnL > b.PnL {
+	top3 := products.
+		Filter(func(p Product) bool { return p.InStock }).
+		Sort(func(a, b Product) int {
+			if a.Price > b.Price {
 				return -1
 			}
-			if a.PnL < b.PnL {
+			if a.Price < b.Price {
 				return 1
 			}
 			return 0
@@ -69,19 +68,19 @@ func main() {
 		Take(3).
 		ToSlice()
 
-	fmt.Println("Top 3 profitable closed trades:")
-	for _, t := range top3 {
-		fmt.Printf("  %s: PnL=%.0f\n", t.Symbol, t.PnL)
+	fmt.Println("Top 3 in-stock products by price:")
+	for _, p := range top3 {
+		fmt.Printf("  %s: $%.0f\n", p.Name, p.Price)
 	}
 
 	// ===== Map (type-changing) =====
 	fmt.Println("\n=== Map ===")
 
-	symbols := stream.Map(trades, func(t Trade) string {
-		return t.Symbol
+	categories := stream.Map(products, func(p Product) string {
+		return p.Category
 	}).Distinct(func(s string) string { return s }).ToSlice()
 
-	fmt.Println("Unique symbols:", symbols)
+	fmt.Println("Unique categories:", categories)
 
 	// ===== FlatMap =====
 	fmt.Println("\n=== FlatMap ===")
@@ -120,10 +119,10 @@ func main() {
 	// ===== GroupBy =====
 	fmt.Println("\n=== GroupBy ===")
 
-	bySymbol := stream.GroupBy(trades, func(t Trade) string { return t.Symbol })
-	for symbol, group := range bySymbol {
-		totalPnL := stream.SumBy(group, func(t Trade) float64 { return t.PnL })
-		fmt.Printf("  %s: PnL=%.0f (%d trades)\n", symbol, totalPnL, group.Count())
+	byCategory := stream.GroupBy(products, func(p Product) string { return p.Category })
+	for category, group := range byCategory {
+		totalPrice := stream.SumBy(group, func(p Product) float64 { return p.Price })
+		fmt.Printf("  %s: total=$%.0f (%d products)\n", category, totalPrice, group.Count())
 	}
 
 	// ===== Associate =====
@@ -132,23 +131,23 @@ func main() {
 	nameToAge := stream.Associate(users, func(u User) (string, int) {
 		return u.Name, u.Age
 	})
-	fmt.Println("Name→Age:", nameToAge)
+	fmt.Println("Name->Age:", nameToAge)
 
 	// ===== Zip =====
 	fmt.Println("\n=== Zip ===")
 
-	dates := stream.Of("2024-01", "2024-02", "2024-03")
-	prices := stream.Of(1.05, 1.06, 1.04)
+	names := stream.Of("Alice", "Bob", "Charlie")
+	scores := stream.Of(85.0, 92.0, 78.0)
 
-	stream.Zip(dates, prices).ForEach(func(p stream.Pair[string, float64]) {
-		fmt.Printf("  %s: %.2f\n", p.First, p.Second)
+	stream.Zip(names, scores).ForEach(func(p stream.Pair[string, float64]) {
+		fmt.Printf("  %s: %.0f\n", p.First, p.Second)
 	})
 
 	// ===== Partition =====
 	fmt.Println("\n=== Partition ===")
 
-	profit, loss := trades.Partition(func(t Trade) bool { return t.PnL > 0 })
-	fmt.Printf("Profit: %d trades, Loss: %d trades\n", profit.Count(), loss.Count())
+	inStock, outOfStock := products.Partition(func(p Product) bool { return p.InStock })
+	fmt.Printf("In stock: %d, Out of stock: %d\n", inStock.Count(), outOfStock.Count())
 
 	// ===== Chunk (batch processing) =====
 	fmt.Println("\n=== Chunk ===")
@@ -169,8 +168,8 @@ func main() {
 	max, _ := stream.Max(values)
 	fmt.Printf("Min: %.0f, Max: %.0f\n", min, max)
 
-	avgPnL := stream.AvgBy(trades, func(t Trade) float64 { return t.PnL })
-	fmt.Printf("Avg PnL: %.2f\n", avgPnL)
+	avgPrice := stream.AvgBy(products, func(p Product) float64 { return p.Price })
+	fmt.Printf("Avg product price: $%.2f\n", avgPrice)
 
 	// ===== Text processing =====
 	fmt.Println("\n=== Text Processing ===")
@@ -189,7 +188,7 @@ func main() {
 	// ===== Chaining: complex pipeline =====
 	fmt.Println("\n=== Complex Pipeline ===")
 
-	// Active adult users → all orders → discount > 0 → total savings
+	// Active adult users -> all orders -> discount > 0 -> total savings
 	savings := stream.Reduce(
 		stream.FlatMap(
 			users.

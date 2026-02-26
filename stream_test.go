@@ -12,11 +12,11 @@ import (
 // Test types
 // ---------------------------------------------------------------------------
 
-type Trade struct {
-	Symbol string
-	Amount float64
-	PnL    float64
-	IsOpen bool
+type Product struct {
+	Name     string
+	Category string
+	Price    float64
+	InStock  bool
 }
 
 type User struct {
@@ -165,14 +165,14 @@ func TestDistinct(t *testing.T) {
 }
 
 func TestPartition(t *testing.T) {
-	profit, loss := stream.Of(
-		Trade{Symbol: "AUDUSD", PnL: 100},
-		Trade{Symbol: "NZDUSD", PnL: -50},
-		Trade{Symbol: "EURUSD", PnL: 200},
-	).Partition(func(t Trade) bool { return t.PnL > 0 })
+	inStock, outOfStock := stream.Of(
+		Product{Name: "Laptop", Price: 1200, InStock: true},
+		Product{Name: "Headphones", Price: 150, InStock: false},
+		Product{Name: "Keyboard", Price: 75, InStock: true},
+	).Partition(func(p Product) bool { return p.InStock })
 
-	if profit.Count() != 2 || loss.Count() != 1 {
-		t.Errorf("Partition: unexpected split %d/%d", profit.Count(), loss.Count())
+	if inStock.Count() != 2 || outOfStock.Count() != 1 {
+		t.Errorf("Partition: unexpected split %d/%d", inStock.Count(), outOfStock.Count())
 	}
 }
 
@@ -210,13 +210,13 @@ func TestFirstAndLast(t *testing.T) {
 }
 
 func TestFind(t *testing.T) {
-	trade, ok := stream.Of(
-		Trade{Symbol: "AUDUSD", PnL: 100},
-		Trade{Symbol: "NZDUSD", PnL: -50},
-	).Find(func(t Trade) bool { return t.Symbol == "NZDUSD" })
+	p, ok := stream.Of(
+		Product{Name: "Laptop", Price: 1200},
+		Product{Name: "Headphones", Price: 150},
+	).Find(func(p Product) bool { return p.Name == "Headphones" })
 
-	if !ok || trade.PnL != -50 {
-		t.Error("Find: failed to find NZDUSD")
+	if !ok || p.Price != 150 {
+		t.Error("Find: failed to find Headphones")
 	}
 }
 
@@ -235,20 +235,20 @@ func TestAnyAllNone(t *testing.T) {
 }
 
 func TestMinByMaxBy(t *testing.T) {
-	trades := stream.Of(
-		Trade{Symbol: "AUDUSD", PnL: 100},
-		Trade{Symbol: "NZDUSD", PnL: -50},
-		Trade{Symbol: "EURUSD", PnL: 200},
+	products := stream.Of(
+		Product{Name: "Laptop", Price: 1200},
+		Product{Name: "Headphones", Price: 150},
+		Product{Name: "Keyboard", Price: 75},
 	)
 
-	best, _ := trades.MaxBy(func(a, b Trade) bool { return a.PnL < b.PnL })
-	if best.Symbol != "EURUSD" {
-		t.Errorf("MaxBy: expected EURUSD, got %s", best.Symbol)
+	most, _ := products.MaxBy(func(a, b Product) bool { return a.Price < b.Price })
+	if most.Name != "Laptop" {
+		t.Errorf("MaxBy: expected Laptop, got %s", most.Name)
 	}
 
-	worst, _ := trades.MinBy(func(a, b Trade) bool { return a.PnL < b.PnL })
-	if worst.Symbol != "NZDUSD" {
-		t.Errorf("MinBy: expected NZDUSD, got %s", worst.Symbol)
+	least, _ := products.MinBy(func(a, b Product) bool { return a.Price < b.Price })
+	if least.Name != "Keyboard" {
+		t.Errorf("MinBy: expected Keyboard, got %s", least.Name)
 	}
 }
 
@@ -280,28 +280,28 @@ func TestFlatMap(t *testing.T) {
 }
 
 func TestGroupBy(t *testing.T) {
-	trades := stream.Of(
-		Trade{Symbol: "AUDUSD", PnL: 100},
-		Trade{Symbol: "NZDUSD", PnL: -50},
-		Trade{Symbol: "AUDUSD", PnL: 200},
+	products := stream.Of(
+		Product{Name: "Laptop", Category: "Electronics", Price: 1200},
+		Product{Name: "T-Shirt", Category: "Clothing", Price: 25},
+		Product{Name: "Keyboard", Category: "Electronics", Price: 75},
 	)
 
-	groups := stream.GroupBy(trades, func(t Trade) string { return t.Symbol })
+	groups := stream.GroupBy(products, func(p Product) string { return p.Category })
 
-	if groups["AUDUSD"].Count() != 2 {
-		t.Errorf("GroupBy: expected 2 AUDUSD trades")
+	if groups["Electronics"].Count() != 2 {
+		t.Errorf("GroupBy: expected 2 Electronics products")
 	}
-	if groups["NZDUSD"].Count() != 1 {
-		t.Errorf("GroupBy: expected 1 NZDUSD trade")
+	if groups["Clothing"].Count() != 1 {
+		t.Errorf("GroupBy: expected 1 Clothing product")
 	}
 }
 
 func TestZip(t *testing.T) {
-	dates := stream.Of("2024-01", "2024-02", "2024-03")
-	prices := stream.Of(1.05, 1.06, 1.04)
+	names := stream.Of("Alice", "Bob", "Charlie")
+	scores := stream.Of(85.0, 92.0, 78.0)
 
-	pairs := stream.Zip(dates, prices).ToSlice()
-	if len(pairs) != 3 || pairs[0].First != "2024-01" || pairs[0].Second != 1.05 {
+	pairs := stream.Zip(names, scores).ToSlice()
+	if len(pairs) != 3 || pairs[0].First != "Alice" || pairs[0].Second != 85.0 {
 		t.Errorf("Zip: unexpected %v", pairs)
 	}
 }
@@ -359,19 +359,19 @@ func TestAvg(t *testing.T) {
 }
 
 func TestSumByAvgBy(t *testing.T) {
-	trades := stream.Of(
-		Trade{PnL: 100},
-		Trade{PnL: -50},
-		Trade{PnL: 200},
+	products := stream.Of(
+		Product{Price: 1200},
+		Product{Price: 150},
+		Product{Price: 75},
 	)
 
-	total := stream.SumBy(trades, func(t Trade) float64 { return t.PnL })
-	if total != 250 {
-		t.Errorf("SumBy: expected 250, got %f", total)
+	total := stream.SumBy(products, func(p Product) float64 { return p.Price })
+	if total != 1425 {
+		t.Errorf("SumBy: expected 1425, got %f", total)
 	}
 
-	avg := stream.AvgBy(trades, func(t Trade) float64 { return t.PnL })
-	expected := 250.0 / 3.0
+	avg := stream.AvgBy(products, func(p Product) float64 { return p.Price })
+	expected := 1425.0 / 3.0
 	if avg < expected-0.01 || avg > expected+0.01 {
 		t.Errorf("AvgBy: expected ~%.2f, got %.2f", expected, avg)
 	}
@@ -395,25 +395,24 @@ func TestMinMax(t *testing.T) {
 // Chaining integration tests — practical examples
 // ---------------------------------------------------------------------------
 
-func TestChaining_TradeAnalysis(t *testing.T) {
-	trades := stream.Of(
-		Trade{Symbol: "AUDUSD", Amount: 10000, PnL: 150, IsOpen: false},
-		Trade{Symbol: "NZDUSD", Amount: 5000, PnL: -80, IsOpen: false},
-		Trade{Symbol: "AUDUSD", Amount: 20000, PnL: 300, IsOpen: true},
-		Trade{Symbol: "EURUSD", Amount: 15000, PnL: -200, IsOpen: false},
-		Trade{Symbol: "AUDUSD", Amount: 8000, PnL: 50, IsOpen: false},
-		Trade{Symbol: "NZDUSD", Amount: 12000, PnL: 100, IsOpen: false},
+func TestChaining_ProductAnalysis(t *testing.T) {
+	products := stream.Of(
+		Product{Name: "Laptop", Category: "Electronics", Price: 1200, InStock: true},
+		Product{Name: "T-Shirt", Category: "Clothing", Price: 25, InStock: true},
+		Product{Name: "Headphones", Category: "Electronics", Price: 150, InStock: false},
+		Product{Name: "Jeans", Category: "Clothing", Price: 80, InStock: true},
+		Product{Name: "Keyboard", Category: "Electronics", Price: 75, InStock: true},
+		Product{Name: "Sneakers", Category: "Clothing", Price: 120, InStock: false},
 	)
 
-	// クローズ済みの利益トレード、PnL降順でトップ3
-	top3Profit := trades.
-		Filter(func(t Trade) bool { return !t.IsOpen }).
-		Filter(func(t Trade) bool { return t.PnL > 0 }).
-		Sort(func(a, b Trade) int {
-			if a.PnL > b.PnL {
+	// 在庫ありの商品を価格降順でトップ3
+	top3 := products.
+		Filter(func(p Product) bool { return p.InStock }).
+		Sort(func(a, b Product) int {
+			if a.Price > b.Price {
 				return -1
 			}
-			if a.PnL < b.PnL {
+			if a.Price < b.Price {
 				return 1
 			}
 			return 0
@@ -421,15 +420,15 @@ func TestChaining_TradeAnalysis(t *testing.T) {
 		Take(3).
 		ToSlice()
 
-	if len(top3Profit) != 3 || top3Profit[0].PnL != 150 {
-		t.Errorf("Chaining: unexpected top3 %v", top3Profit)
+	if len(top3) != 3 || top3[0].Name != "Laptop" {
+		t.Errorf("Chaining: unexpected top3 %v", top3)
 	}
 
-	// 通貨ペア別PnL集計
-	bySymbol := stream.GroupBy(trades, func(t Trade) string { return t.Symbol })
-	for symbol, group := range bySymbol {
-		totalPnL := stream.SumBy(group, func(t Trade) float64 { return t.PnL })
-		t.Logf("%s: total PnL = %.2f (%d trades)", symbol, totalPnL, group.Count())
+	// カテゴリ別の価格合計
+	byCategory := stream.GroupBy(products, func(p Product) string { return p.Category })
+	for category, group := range byCategory {
+		totalPrice := stream.SumBy(group, func(p Product) float64 { return p.Price })
+		t.Logf("%s: total = %.2f (%d products)", category, totalPrice, group.Count())
 	}
 }
 

@@ -112,15 +112,46 @@ Operaciones especializadas para streams numéricos (`int`, `float64`, etc.).
 
 ## Ejemplos
 
+Tipos utilizados en los ejemplos:
+
+```go
+type Product struct {
+    Name     string
+    Category string
+    Price    float64
+    InStock  bool
+}
+
+type User struct {
+    Name     string
+    Age      int
+    IsActive bool
+    Orders   []Order
+}
+
+type Order struct {
+    Product  string
+    Amount   float64
+    Discount float64
+}
+```
+
 ### Filter, Sort, Take
 
 ```go
-top3 := trades.
-    Filter(func(t Trade) bool { return !t.IsOpen }).
-    Filter(func(t Trade) bool { return t.PnL > 0 }).
-    Sort(func(a, b Trade) int {
-        if a.PnL > b.PnL { return -1 }
-        if a.PnL < b.PnL { return 1 }
+products := stream.Of(
+    Product{Name: "Laptop", Category: "Electronics", Price: 1200, InStock: true},
+    Product{Name: "T-Shirt", Category: "Clothing", Price: 25, InStock: true},
+    Product{Name: "Headphones", Category: "Electronics", Price: 150, InStock: false},
+    Product{Name: "Jeans", Category: "Clothing", Price: 80, InStock: true},
+)
+
+// Productos en stock, ordenados por precio descendente, top 3
+top3 := products.
+    Filter(func(p Product) bool { return p.InStock }).
+    Sort(func(a, b Product) int {
+        if a.Price > b.Price { return -1 }
+        if a.Price < b.Price { return 1 }
         return 0
     }).
     Take(3).
@@ -130,13 +161,13 @@ top3 := trades.
 ### Map y FlatMap
 
 ```go
-// Extraer nombres
+// Extraer nombres de productos
 names := stream.Map(
-    stream.Of(users...).Filter(func(u User) bool { return u.IsActive }),
-    func(u User) string { return u.Name },
+    products.Filter(func(p Product) bool { return p.InStock }),
+    func(p Product) string { return p.Name },
 ).ToSlice()
 
-// Aplanar pedidos anidados
+// Aplanar pedidos anidados de usuarios
 allOrders := stream.FlatMap(
     stream.Of(users...),
     func(u User) []Order { return u.Orders },
@@ -146,12 +177,12 @@ allOrders := stream.FlatMap(
 ### GroupBy y agregación
 
 ```go
-bySymbol := stream.GroupBy(trades, func(t Trade) string { return t.Symbol })
+byCategory := stream.GroupBy(products, func(p Product) string { return p.Category })
 
-for symbol, group := range bySymbol {
-    totalPnL := stream.SumBy(group, func(t Trade) float64 { return t.PnL })
-    avgPnL := stream.AvgBy(group, func(t Trade) float64 { return t.PnL })
-    fmt.Printf("%s: total=%.2f avg=%.2f count=%d\n", symbol, totalPnL, avgPnL, group.Count())
+for category, group := range byCategory {
+    total := stream.SumBy(group, func(p Product) float64 { return p.Price })
+    avg := stream.AvgBy(group, func(p Product) float64 { return p.Price })
+    fmt.Printf("%s: total=$%.2f avg=$%.2f count=%d\n", category, total, avg, group.Count())
 }
 ```
 
@@ -159,8 +190,7 @@ for symbol, group := range bySymbol {
 
 ```go
 // Dividir por condición
-profit, loss := trades.Partition(func(t Trade) bool { return t.PnL > 0 })
-winRate := float64(profit.Count()) / float64(trades.Count()) * 100
+inStock, outOfStock := products.Partition(func(p Product) bool { return p.InStock })
 
 // Procesamiento por lotes
 batches := stream.From(items).Chunk(100)
@@ -172,11 +202,11 @@ for _, batch := range batches {
 ### Zip
 
 ```go
-pairs := stream.Zip(
-    stream.Of("2024-01", "2024-02", "2024-03"),
-    stream.Of(1.05, 1.06, 1.04),
-).ToSlice()
-// [{2024-01 1.05}, {2024-02 1.06}, {2024-03 1.04}]
+names := stream.Of("Alice", "Bob", "Charlie")
+scores := stream.Of(85.0, 92.0, 78.0)
+
+pairs := stream.Zip(names, scores).ToSlice()
+// [{Alice 85}, {Bob 92}, {Charlie 78}]
 ```
 
 ## License
