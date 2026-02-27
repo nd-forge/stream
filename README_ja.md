@@ -282,29 +282,47 @@ for v := range stream.Of(1, 2, 3).Seq() {
 
 ## ベンチマーク
 
-10,000 個の `int` 要素で `Filter(偶数)` → `Take(10)` — Apple M1:
+10,000 個の `int` 要素 — Apple M1。[samber/lo](https://github.com/samber/lo) との比較。
+
+### Filter + Take（遅延評価の優位性）
 
 ```
-ベンチマーク              ns/op     B/op    allocs/op
-─────────────────────────────────────────────────────
-NativeFilterTake         124      248        5
-StreamFilterTake         315      464       13   ← 遅延: ネイティブの2.5倍
+ベンチマーク                  ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native                         111        248          5
+Stream                         346        528         15   ← ネイティブの3.1倍
+lo                          25,000     81,920          1   ← Stream より72倍遅い
 ```
 
-遅延評価により `Take` が満たされた時点で処理を打ち切るため、必要最小限の要素のみ処理します。
+Stream の遅延評価は `Take` が満たされた時点で処理を打ち切ります。lo は**全 10,000 要素**をフィルタした後に切り出すため、短絡できません。
 
-全件走査（早期終了なし）:
+### チェーン: Filter → Map → Take 5
 
 ```
-ベンチマーク              ns/op     B/op    allocs/op
-─────────────────────────────────────────────────────
-NativeFilter          18,746  128,249       16
-StreamFilter          42,359  128,377       21
-NativeReduce           3,245        0        0
-StreamReduce           9,740        0        0
+ベンチマーク                  ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native                         171        260          9
+Stream                         384        544         19   ← ネイティブの2.2倍
+lo                          64,600    152,601      3,336   ← Stream より168倍遅い
 ```
 
-> `go test -bench=. -benchmem ./...` で再現可能。
+### 全件走査（早期終了なし）
+
+```
+ベンチマーク                  ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native Filter              19,400    128,249         16
+lo     Filter              25,600     81,920          1
+Stream Filter              42,200    128,409         22
+
+Native Reduce               3,300          0          0
+lo     Reduce               9,700          0          0
+Stream Reduce              23,400         64          2
+```
+
+早期終了なしの全件走査では、lo は抽象化オーバーヘッドが低いため Stream より高速です。Stream の優位性は `Take`、`First`、`Find` などの短絡操作を含むパイプラインで発揮されます。
+
+> `cd _benchmark && go test -bench=. -benchmem ./...` で再現可能。
 
 ## License
 

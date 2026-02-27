@@ -284,29 +284,47 @@ for v := range stream.Of(1, 2, 3).Seq() {
 
 ## 基准测试
 
-10,000 个 `int` 元素，`Filter(偶数)` 然后 `Take(10)` — Apple M1：
+10,000 个 `int` 元素 — Apple M1。与 [samber/lo](https://github.com/samber/lo) 对比。
+
+### Filter + Take（惰性求值优势）
 
 ```
-基准测试               ns/op     B/op    allocs/op
-─────────────────────────────────────────────────────
-NativeFilterTake         124      248        5
-StreamFilterTake         315      464       13   ← 惰性：原生的2.5倍
+基准测试                      ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native                         111        248          5
+Stream                         346        528         15   ← 原生的3.1倍
+lo                          25,000     81,920          1   ← 比 Stream 慢72倍
 ```
 
-惰性求值会短路 — 只处理元素直到 `Take` 满足为止。
+Stream 的惰性求值在 `Take` 满足后即刻短路。lo 必须先过滤**全部 10,000 个元素**，无法短路。
 
-全量扫描（无提前终止）：
+### 链式操作：Filter → Map → Take 5
 
 ```
-基准测试               ns/op     B/op    allocs/op
-─────────────────────────────────────────────────────
-NativeFilter          18,746  128,249       16
-StreamFilter          42,359  128,377       21
-NativeReduce           3,245        0        0
-StreamReduce           9,740        0        0
+基准测试                      ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native                         171        260          9
+Stream                         384        544         19   ← 原生的2.2倍
+lo                          64,600    152,601      3,336   ← 比 Stream 慢168倍
 ```
 
-> 运行 `go test -bench=. -benchmem ./...` 来复现。
+### 全量扫描（无提前终止）
+
+```
+基准测试                      ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native Filter              19,400    128,249         16
+lo     Filter              25,600     81,920          1
+Stream Filter              42,200    128,409         22
+
+Native Reduce               3,300          0          0
+lo     Reduce               9,700          0          0
+Stream Reduce              23,400         64          2
+```
+
+在无提前终止的全量扫描中，lo 因更低的抽象开销而快于 Stream。Stream 的优势体现在包含 `Take`、`First`、`Find` 等短路操作的管道中。
+
+> 运行 `cd _benchmark && go test -bench=. -benchmem ./...` 来复现。
 
 ## License
 

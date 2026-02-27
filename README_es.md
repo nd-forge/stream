@@ -284,29 +284,47 @@ for v := range stream.Of(1, 2, 3).Seq() {
 
 ## Benchmark
 
-10,000 elementos `int`, `Filter(par)` luego `Take(10)` — Apple M1:
+10,000 elementos `int` — Apple M1. Comparado con [samber/lo](https://github.com/samber/lo).
+
+### Filter + Take (ventaja de evaluación lazy)
 
 ```
-Benchmark              ns/op     B/op    allocs/op
-─────────────────────────────────────────────────────
-NativeFilterTake         124      248        5
-StreamFilterTake         315      464       13   <- lazy: 2.5x nativo
+Benchmark                    ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native                         111        248          5
+Stream                         346        528         15   ← 3.1x nativo
+lo                          25,000     81,920          1   ← 72x más lento que Stream
 ```
 
-La evaluacion lazy cortocircuita — solo procesa elementos hasta que `Take` se satisface.
+La evaluación lazy de Stream cortocircuita cuando `Take` se satisface. lo debe filtrar **los 10,000 elementos** primero, sin posibilidad de cortocircuito.
 
-Escaneo completo (sin terminacion temprana):
+### Encadenado: Filter → Map → Take 5
 
 ```
-Benchmark              ns/op     B/op    allocs/op
-─────────────────────────────────────────────────────
-NativeFilter          18,746  128,249       16
-StreamFilter          42,359  128,377       21
-NativeReduce           3,245        0        0
-StreamReduce           9,740        0        0
+Benchmark                    ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native                         171        260          9
+Stream                         384        544         19   ← 2.2x nativo
+lo                          64,600    152,601      3,336   ← 168x más lento que Stream
 ```
 
-> Ejecute `go test -bench=. -benchmem ./...` para reproducir.
+### Escaneo completo (sin terminación temprana)
+
+```
+Benchmark                    ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native Filter              19,400    128,249         16
+lo     Filter              25,600     81,920          1
+Stream Filter              42,200    128,409         22
+
+Native Reduce               3,300          0          0
+lo     Reduce               9,700          0          0
+Stream Reduce              23,400         64          2
+```
+
+En escaneos completos sin terminación temprana, lo es más rápido que Stream debido a menor sobrecarga de abstracción. La ventaja de Stream se manifiesta en pipelines con operaciones de cortocircuito como `Take`, `First`, `Find`.
+
+> Ejecute `cd _benchmark && go test -bench=. -benchmem ./...` para reproducir.
 
 ## License
 

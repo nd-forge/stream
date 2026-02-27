@@ -284,29 +284,47 @@ for v := range stream.Of(1, 2, 3).Seq() {
 
 ## Benchmark
 
-10,000 `int` elements, `Filter(even)` then `Take(10)` — Apple M1:
+10,000 `int` elements — Apple M1. Compared with [samber/lo](https://github.com/samber/lo).
+
+### Filter + Take (lazy evaluation advantage)
 
 ```
-Benchmark              ns/op     B/op    allocs/op
-─────────────────────────────────────────────────────
-NativeFilterTake         124      248        5
-StreamFilterTake         315      464       13   ← lazy: 2.5x native
+Benchmark                    ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native                         111        248          5
+Stream                         346        528         15   ← 3.1x native
+lo                          25,000     81,920          1   ← 72x slower than Stream
 ```
 
-Lazy evaluation short-circuits — it only processes elements until `Take` is satisfied.
+Stream's lazy evaluation short-circuits — only processes elements until `Take` is satisfied. lo must filter **all 10,000 elements** first, then take.
 
-Full scan (no early termination):
+### Chained: Filter → Map → Take 5
 
 ```
-Benchmark              ns/op     B/op    allocs/op
-─────────────────────────────────────────────────────
-NativeFilter          18,746  128,249       16
-StreamFilter          42,359  128,377       21
-NativeReduce           3,245        0        0
-StreamReduce           9,740        0        0
+Benchmark                    ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native                         171        260          9
+Stream                         384        544         19   ← 2.2x native
+lo                          64,600    152,601      3,336   ← 168x slower than Stream
 ```
 
-> Run `go test -bench=. -benchmem ./...` to reproduce.
+### Full scan (no early termination)
+
+```
+Benchmark                    ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native Filter              19,400    128,249         16
+lo     Filter              25,600     81,920          1
+Stream Filter              42,200    128,409         22
+
+Native Reduce               3,300          0          0
+lo     Reduce               9,700          0          0
+Stream Reduce              23,400         64          2
+```
+
+For full scans without early termination, lo is faster than Stream due to lower abstraction overhead. Stream's advantage shines in pipelines with `Take`, `First`, `Find`, or other short-circuiting operations.
+
+> Run `cd _benchmark && go test -bench=. -benchmem ./...` to reproduce.
 
 ## License
 

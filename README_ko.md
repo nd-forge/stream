@@ -284,29 +284,47 @@ for v := range stream.Of(1, 2, 3).Seq() {
 
 ## 벤치마크
 
-10,000개 `int` 요소에서 `Filter(짝수)` → `Take(10)` — Apple M1:
+10,000개 `int` 요소 — Apple M1. [samber/lo](https://github.com/samber/lo)와 비교.
+
+### Filter + Take (지연 평가 이점)
 
 ```
-벤치마크                ns/op     B/op    allocs/op
-─────────────────────────────────────────────────────
-NativeFilterTake         124      248        5
-StreamFilterTake         315      464       13   ← 지연: 네이티브의 2.5배
+벤치마크                      ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native                         111        248          5
+Stream                         346        528         15   ← 네이티브의 3.1배
+lo                          25,000     81,920          1   ← Stream보다 72배 느림
 ```
 
-지연 평가에 의한 쇼트서킷 — `Take`가 충족될 때까지만 요소를 처리합니다.
+Stream의 지연 평가는 `Take`가 충족되면 즉시 쇼트서킷합니다. lo는 **전체 10,000개 요소**를 먼저 필터링해야 하므로 쇼트서킷이 불가능합니다.
 
-전체 스캔 (조기 종료 없음):
+### 체이닝: Filter → Map → Take 5
 
 ```
-벤치마크                ns/op     B/op    allocs/op
-─────────────────────────────────────────────────────
-NativeFilter          18,746  128,249       16
-StreamFilter          42,359  128,377       21
-NativeReduce           3,245        0        0
-StreamReduce           9,740        0        0
+벤치마크                      ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native                         171        260          9
+Stream                         384        544         19   ← 네이티브의 2.2배
+lo                          64,600    152,601      3,336   ← Stream보다 168배 느림
 ```
 
-> `go test -bench=. -benchmem ./...`로 재현 가능.
+### 전체 스캔 (조기 종료 없음)
+
+```
+벤치마크                      ns/op       B/op    allocs/op
+────────────────────────────────────────────────────────────
+Native Filter              19,400    128,249         16
+lo     Filter              25,600     81,920          1
+Stream Filter              42,200    128,409         22
+
+Native Reduce               3,300          0          0
+lo     Reduce               9,700          0          0
+Stream Reduce              23,400         64          2
+```
+
+조기 종료 없는 전체 스캔에서는 lo가 추상화 오버헤드가 낮아 Stream보다 빠릅니다. Stream의 이점은 `Take`, `First`, `Find` 등 쇼트서킷 연산이 포함된 파이프라인에서 발휘됩니다.
+
+> `cd _benchmark && go test -bench=. -benchmem ./...`로 재현 가능.
 
 ## License
 
