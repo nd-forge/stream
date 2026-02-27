@@ -1,5 +1,10 @@
 # stream
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/nd-forge/stream.svg)](https://pkg.go.dev/github.com/nd-forge/stream)
+[![CI](https://github.com/nd-forge/stream/actions/workflows/check-code.yml/badge.svg)](https://github.com/nd-forge/stream/actions/workflows/check-code.yml)
+[![coverage](https://img.shields.io/badge/coverage-91.6%25-brightgreen)](https://github.com/nd-forge/stream/actions/workflows/check-code.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/nd-forge/stream)](https://goreportcard.com/report/github.com/nd-forge/stream)
+
 **English** | [日本語](README_ja.md) | [中文](README_zh.md) | [한국어](README_ko.md) | [Español](README_es.md) | [Português](README_pt.md)
 
 A Go generic stream processing library. Chainable collection operations for filter, map, sort, group, and more — with **lazy evaluation** by default.

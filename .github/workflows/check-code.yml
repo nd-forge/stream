@@ -1,0 +1,199 @@
+name: Check Code
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.23', '1.24', '1.25']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: false
+
+      - name: Run tests
+        run: go test -v -race -count=1 ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          install-mode: goinstall
+
+  coverage:
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Run coverage
+        id: coverage
+        run: |
+          go test -coverprofile=coverage.out -covermode=atomic ./...
+          REPORT=$(go tool cover -func=coverage.out)
+          TOTAL=$(echo "$REPORT" | grep total | awk '{print $3}' | sed 's/%//')
+
+          echo "$REPORT"
+          echo ""
+          echo "Total coverage: ${TOTAL}%"
+
+          # Build function table (exclude total line)
+          TABLE="| File | Function | Coverage |\n|---|---|---|"
+          while IFS= read -r line; do
+            FILE=$(echo "$line" | awk '{print $1}')
+            FUNC=$(echo "$line" | awk '{print $2}')
+            COV=$(echo "$line" | awk '{print $NF}')
+            TABLE="${TABLE}\n| \`${FILE}\` | \`${FUNC}\` | ${COV} |"
+          done <<< "$(echo "$REPORT" | grep -v total)"
+
+          # Build uncovered table (< 100%)
+          UNCOVERED_TABLE="| File | Function | Coverage |\n|---|---|---|"
+          UNCOVERED_COUNT=0
+          while IFS= read -r line; do
+            COV=$(echo "$line" | awk '{print $NF}' | sed 's/%//')
+            if (( $(echo "$COV < 100.0" | bc -l) )); then
+              FILE=$(echo "$line" | awk '{print $1}')
+              FUNC=$(echo "$line" | awk '{print $2}')
+              UNCOVERED_TABLE="${UNCOVERED_TABLE}\n| \`${FILE}\` | \`${FUNC}\` | ${COV}% |"
+              UNCOVERED_COUNT=$((UNCOVERED_COUNT + 1))
+            fi
+          done <<< "$(echo "$REPORT" | grep -v total)"
+
+          # Threshold check
+          PASS="true"
+          if (( $(echo "$TOTAL < 80.0" | bc -l) )); then
+            PASS="false"
+          fi
+
+          # Status emoji
+          if [ "$PASS" = "true" ]; then
+            STATUS="✅"
+          else
+            STATUS="❌"
+          fi
+
+          # Save outputs
+          {
+            echo "total=${TOTAL}"
+            echo "pass=${PASS}"
+            echo "status=${STATUS}"
+            echo "uncovered_count=${UNCOVERED_COUNT}"
+          } >> "$GITHUB_OUTPUT"
+
+          # Save tables to files (multiline)
+          echo -e "$TABLE" > /tmp/coverage_table.md
+          echo -e "$UNCOVERED_TABLE" > /tmp/uncovered_table.md
+
+          if [ "$PASS" = "false" ]; then
+            echo "::error::Coverage ${TOTAL}% is below 80% threshold"
+          fi
+
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const total = '${{ steps.coverage.outputs.total }}';
+            const pass = '${{ steps.coverage.outputs.pass }}';
+            const status = '${{ steps.coverage.outputs.status }}';
+            const uncoveredCount = '${{ steps.coverage.outputs.uncovered_count }}';
+            const fullTable = fs.readFileSync('/tmp/coverage_table.md', 'utf8').trim();
+            const uncoveredTable = fs.readFileSync('/tmp/uncovered_table.md', 'utf8').trim();
+
+            let body = `## 📊 Coverage Report\n\n`;
+            body += `**Total: ${total}%** (threshold: 80%) ${status}\n\n`;
+
+            if (parseInt(uncoveredCount) > 0) {
+              body += `<details>\n<summary>⚠️ Uncovered functions (${uncoveredCount})</summary>\n\n`;
+              body += uncoveredTable + '\n\n</details>\n\n';
+            }
+
+            body += `<details>\n<summary>All functions</summary>\n\n`;
+            body += fullTable + '\n\n</details>';
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const marker = '## 📊 Coverage Report';
+            const existing = comments.find(c => c.body.startsWith(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Fail if below threshold
+        if: steps.coverage.outputs.pass == 'false'
+        run: exit 1
+
+      - name: Update coverage badge
+        if: steps.coverage.outputs.pass == 'true'
+        run: |
+          TOTAL=${{ steps.coverage.outputs.total }}
+
+          if (( $(echo "$TOTAL >= 90" | bc -l) )); then
+            COLOR="brightgreen"
+          elif (( $(echo "$TOTAL >= 80" | bc -l) )); then
+            COLOR="green"
+          elif (( $(echo "$TOTAL >= 70" | bc -l) )); then
+            COLOR="yellowgreen"
+          elif (( $(echo "$TOTAL >= 60" | bc -l) )); then
+            COLOR="yellow"
+          else
+            COLOR="red"
+          fi
+
+          sed -i "s|!\[coverage\](https://img.shields.io/badge/coverage-[^)]*)|![coverage](https://img.shields.io/badge/coverage-${TOTAL}%25-${COLOR})|g" README.md
+
+          if git diff --quiet README.md; then
+            echo "No badge change needed"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add README.md
+            git commit -m "update coverage badge to ${TOTAL}%"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
