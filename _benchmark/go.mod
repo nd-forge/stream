@@ -5,7 +5,7 @@ go 1.25
 replace github.com/nd-forge/stream => ../
 
 require (
-	github.com/nd-forge/stream v0.0.0-00010101000000-000000000000
+	github.com/nd-forge/stream v0.2.0
 	github.com/samber/lo v1.52.0
 )
 
