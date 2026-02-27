@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README_ja.md) | [中文](README_zh.md) | **한국어** | [Español](README_es.md) | [Português](README_pt.md)
 
-Go 제네릭 스트림 처리 라이브러리. filter, map, sort, group 등의 컬렉션 연산을 메서드 체이닝으로 작성할 수 있습니다.
+Go 제네릭 스트림 처리 라이브러리. filter, map, sort, group 등의 컬렉션 연산을 메서드 체이닝으로 작성할 수 있습니다 — **즉시 평가** (`Stream`)와 **지연 평가** (`Pipeline`) 모두 지원.
 
 ## 설치
 
@@ -31,6 +31,17 @@ names := stream.Map(
 ```
 
 ## 설계 방침
+
+### 즉시 평가 vs 지연 평가
+
+| 타입 | 평가 방식 | 최적 용도 |
+|---|---|---|
+| `Stream[T]` | **즉시 평가** — 중간 슬라이스 생성 | 소/중규모 데이터, 랜덤 액세스 (`Shuffle`, `Chunk`, `TakeLast`) |
+| `Pipeline[T]` | **지연 평가** — 중간 할당 제로 | 대규모 데이터, 무한 시퀀스, 조기 종료 (`Filter+Take`) |
+
+자유롭게 전환: `stream.Lazy()` / `pipeline.ToStream()`
+
+### 타입 파라미터
 
 Go에서는 메서드에 새로운 타입 파라미터를 추가할 수 없습니다. 본 라이브러리는 다음과 같이 분리합니다:
 
@@ -109,6 +120,60 @@ Go에서는 메서드에 새로운 타입 파라미터를 추가할 수 없습�
 | `Sum(s)` / `Avg(s)` | 합계 / 평균 |
 | `Min(s)` / `Max(s)` | 최솟값 / 최댓값 |
 | `SumBy(s, fn)` / `AvgBy(s, fn)` | 추출값의 합계 / 평균 |
+
+### Pipeline (지연 평가)
+
+#### 생성자
+
+| 함수 | 설명 |
+|---|---|
+| `Lazy[T](items ...T)` | 가변 인자에서 지연 파이프라인 생성 |
+| `LazyFrom[T](seq)` | `iter.Seq[T]`에서 생성 |
+| `LazyRange(start, end)` | 지연 정수 시퀀스 `[start, end)` |
+| `stream.Lazy()` | `Stream[T]` → `Pipeline[T]` 변환 |
+
+#### 생성기 (무한 시퀀스)
+
+| 함수 | 설명 |
+|---|---|
+| `Naturals()` | 0, 1, 2, 3, ... |
+| `Iterate(seed, fn)` | seed, fn(seed), fn(fn(seed)), ... |
+| `Repeat(value)` | 값의 무한 반복 |
+| `RepeatN(value, n)` | 값을 n번 반복 |
+
+#### 체이닝 가능 메서드
+
+Stream과 동일한 API: `Filter`, `Reject`, `Sort`, `Reverse`, `Take`, `Skip`, `TakeWhile`, `DropWhile`, `Distinct`, `Peek`, `Chain`
+
+#### 종단 연산
+
+Stream과 동일: `ToSlice`, `First`, `Last`, `Find`, `Reduce`, `Any`, `All`, `None`, `Count`, `CountBy`, `IsEmpty`, `Contains`, `MinBy`, `MaxBy`, `ForEach`, `ForEachIndexed`
+
+추가: `ToStream()` (즉시 Stream으로 변환), `Seq()` (기본 `iter.Seq[T]` 가져오기)
+
+#### 변환 함수 (타입 변환)
+
+| 함수 | 설명 |
+|---|---|
+| `PipeMap(p, fn)` | 변환 `T → U` |
+| `PipeMapIndexed(p, fn)` | 인덱스 포함 변환 |
+| `PipeFlatMap(p, fn)` | 변환 후 평탄화 `T → []U` |
+| `PipeReduce(p, initial, fn)` | 다른 타입으로 폴딩 `T → U` |
+| `PipeGroupBy(p, key)` | 키로 그룹화 `→ map[K][]T` |
+| `PipeAssociate(p, fn)` | 맵 구축 `→ map[K]V` |
+| `PipeZip(p1, p2)` | 두 파이프라인 페어링 `→ Pipeline[Pair[T,U]]` |
+| `PipeFlatten(p)` | 평탄화 `Pipeline[[]T] → Pipeline[T]` |
+| `PipeToMap(p)` | 변환 `Pipeline[Pair[K,V]] → map[K]V` |
+| `PipeEnumerate(p)` | 인덱스 추가 `→ Pipeline[Pair[int,T]]` |
+
+### iter.Seq 브릿지
+
+| 함수 | 설명 |
+|---|---|
+| `stream.Iter()` | `Stream[T]` → `iter.Seq[T]` |
+| `stream.Iter2()` | `Stream[T]` → `iter.Seq2[int, T]` |
+| `Collect(seq)` | `iter.Seq[T]` → `Stream[T]` |
+| `Collect2(seq)` | `iter.Seq2[K,V]` → `Stream[Pair[K,V]]` |
 
 ## 예제
 
@@ -208,6 +273,86 @@ scores := stream.Of(85.0, 92.0, 78.0)
 pairs := stream.Zip(names, scores).ToSlice()
 // [{Alice 85}, {Bob 92}, {Charlie 78}]
 ```
+
+### Pipeline (지연 평가)
+
+```go
+// 무한 시퀀스: 처음 5개의 짝수
+evens := stream.Naturals().
+    Filter(func(n int) bool { return n%2 == 0 }).
+    Take(5).
+    ToSlice()
+// [0, 2, 4, 6, 8]
+
+// 피보나치 수열
+fib := stream.PipeMap(
+    stream.Iterate(
+        stream.Pair[int, int]{First: 0, Second: 1},
+        func(p stream.Pair[int, int]) stream.Pair[int, int] {
+            return stream.Pair[int, int]{First: p.Second, Second: p.First + p.Second}
+        },
+    ).Take(10),
+    func(p stream.Pair[int, int]) int { return p.First },
+).ToSlice()
+// [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+
+// 지연 평가: 100만 요소 중 2,001개만 처리
+result := stream.LazyRange(0, 1_000_000).
+    Filter(func(n int) bool { return n%1000 == 0 }).
+    Take(3).
+    ToSlice()
+// [0, 1000, 2000]
+```
+
+### 즉시 평가와 지연 평가 전환
+
+```go
+// Stream → Pipeline (지연 처리로)
+result := stream.Of(items...).Lazy().Filter(pred).Take(10).ToSlice()
+
+// Pipeline → Stream (즉시 전용 연산으로)
+chunks := stream.Naturals().Take(12).ToStream().Chunk(4)
+```
+
+### iter.Seq 브릿지
+
+```go
+// 표준 라이브러리 연동
+keys := stream.Collect(maps.Keys(myMap)).Sort(cmp).ToSlice()
+
+// for-range 지원
+for v := range stream.Of(1, 2, 3).Iter() {
+    fmt.Println(v)
+}
+```
+
+## 벤치마크
+
+10,000개 `int` 요소에서 `Filter(짝수)` → `Take(10)` — Apple M1:
+
+```
+벤치마크                ns/op     B/op    allocs/op
+─────────────────────────────────────────────────────
+NativeFilterTake         124      248        5
+PipelineFilterTake       315      464       13   ← 지연: 네이티브의 2.5배
+StreamFilterTake      30,831  128,329       17   ← 즉시: 전체 스캔
+```
+
+`Filter+Take`에서 Pipeline은 Stream보다 **약 100배 빠릅니다**. 지연 평가로 `Take`가 충족되면 즉시 중단하지만, Stream은 전체 슬라이스를 먼저 필터링합니다.
+
+전체 스캔 (조기 종료 없음):
+
+```
+벤치마크                ns/op     B/op    allocs/op
+─────────────────────────────────────────────────────
+NativeFilter          18,746  128,249       16
+StreamFilter          30,529  128,249       16
+PipelineFilter        42,359  128,377       21
+NativeReduce           3,245        0        0
+StreamReduce           9,740        0        0
+```
+
+> `go test -bench=. -benchmem ./...`로 재현 가능.
 
 ## License
 

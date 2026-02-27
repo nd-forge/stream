@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README_ja.md) | [中文](README_zh.md) | [한국어](README_ko.md) | [Español](README_es.md) | **Português**
 
-Uma biblioteca genérica de processamento de streams para Go. Operações encadeáveis sobre coleções: filter, map, sort, group e mais.
+Uma biblioteca genérica de processamento de streams para Go. Operações encadeáveis sobre coleções: filter, map, sort, group e mais — com avaliação **eager** (`Stream`) e **lazy** (`Pipeline`).
 
 ## Instalação
 
@@ -31,6 +31,17 @@ names := stream.Map(
 ```
 
 ## Design
+
+### Eager vs Lazy
+
+| Tipo | Avaliação | Ideal para |
+|---|---|---|
+| `Stream[T]` | **Eager** — aloca slices intermediários | Dados pequenos/médios, acesso aleatório (`Shuffle`, `Chunk`, `TakeLast`) |
+| `Pipeline[T]` | **Lazy** — zero alocação intermediária | Dados grandes, sequências infinitas, terminação antecipada (`Filter+Take`) |
+
+Alterne livremente: `stream.Lazy()` / `pipeline.ToStream()`
+
+### Parâmetros de tipo
 
 Go não permite que métodos introduzam novos parâmetros de tipo. Esta biblioteca separa:
 
@@ -109,6 +120,60 @@ Operações especializadas para streams numéricos (`int`, `float64`, etc.).
 | `Sum(s)` / `Avg(s)` | Soma / média |
 | `Min(s)` / `Max(s)` | Mínimo / máximo |
 | `SumBy(s, fn)` / `AvgBy(s, fn)` | Soma / média de valores extraídos |
+
+### Pipeline (Avaliação Lazy)
+
+#### Construtores
+
+| Função | Descrição |
+|---|---|
+| `Lazy[T](items ...T)` | Criar pipeline lazy de args |
+| `LazyFrom[T](seq)` | Criar de `iter.Seq[T]` |
+| `LazyRange(start, end)` | Sequência lazy de inteiros `[start, end)` |
+| `stream.Lazy()` | Converter `Stream[T]` para `Pipeline[T]` |
+
+#### Geradores (Sequências Infinitas)
+
+| Função | Descrição |
+|---|---|
+| `Naturals()` | 0, 1, 2, 3, ... |
+| `Iterate(seed, fn)` | seed, fn(seed), fn(fn(seed)), ... |
+| `Repeat(value)` | Repetição infinita de valor |
+| `RepeatN(value, n)` | Repetir valor n vezes |
+
+#### Métodos encadeáveis
+
+Mesma API do Stream: `Filter`, `Reject`, `Sort`, `Reverse`, `Take`, `Skip`, `TakeWhile`, `DropWhile`, `Distinct`, `Peek`, `Chain`
+
+#### Operações terminais
+
+Igual ao Stream: `ToSlice`, `First`, `Last`, `Find`, `Reduce`, `Any`, `All`, `None`, `Count`, `CountBy`, `IsEmpty`, `Contains`, `MinBy`, `MaxBy`, `ForEach`, `ForEachIndexed`
+
+Adicional: `ToStream()` (converter para Stream eager), `Seq()` (obter `iter.Seq[T]` subjacente)
+
+#### Funções de transformação (mudança de tipo)
+
+| Função | Descrição |
+|---|---|
+| `PipeMap(p, fn)` | Transformar `T → U` |
+| `PipeMapIndexed(p, fn)` | Transformar com índice |
+| `PipeFlatMap(p, fn)` | Transformar e achatar `T → []U` |
+| `PipeReduce(p, initial, fn)` | Dobrar para tipo diferente `T → U` |
+| `PipeGroupBy(p, key)` | Agrupar por chave `→ map[K][]T` |
+| `PipeAssociate(p, fn)` | Construir mapa `→ map[K]V` |
+| `PipeZip(p1, p2)` | Parear pipelines `→ Pipeline[Pair[T,U]]` |
+| `PipeFlatten(p)` | Achatar `Pipeline[[]T] → Pipeline[T]` |
+| `PipeToMap(p)` | Converter `Pipeline[Pair[K,V]] → map[K]V` |
+| `PipeEnumerate(p)` | Adicionar índice `→ Pipeline[Pair[int,T]]` |
+
+### Ponte iter.Seq
+
+| Função | Descrição |
+|---|---|
+| `stream.Iter()` | `Stream[T]` → `iter.Seq[T]` |
+| `stream.Iter2()` | `Stream[T]` → `iter.Seq2[int, T]` |
+| `Collect(seq)` | `iter.Seq[T]` → `Stream[T]` |
+| `Collect2(seq)` | `iter.Seq2[K,V]` → `Stream[Pair[K,V]]` |
 
 ## Exemplos
 
@@ -208,6 +273,86 @@ scores := stream.Of(85.0, 92.0, 78.0)
 pairs := stream.Zip(names, scores).ToSlice()
 // [{Alice 85}, {Bob 92}, {Charlie 78}]
 ```
+
+### Pipeline (Lazy)
+
+```go
+// Sequência infinita: primeiros 5 números pares
+evens := stream.Naturals().
+    Filter(func(n int) bool { return n%2 == 0 }).
+    Take(5).
+    ToSlice()
+// [0, 2, 4, 6, 8]
+
+// Sequência de Fibonacci
+fib := stream.PipeMap(
+    stream.Iterate(
+        stream.Pair[int, int]{First: 0, Second: 1},
+        func(p stream.Pair[int, int]) stream.Pair[int, int] {
+            return stream.Pair[int, int]{First: p.Second, Second: p.First + p.Second}
+        },
+    ).Take(10),
+    func(p stream.Pair[int, int]) int { return p.First },
+).ToSlice()
+// [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+
+// Avaliação lazy: processa apenas 2.001 de 1.000.000 elementos
+result := stream.LazyRange(0, 1_000_000).
+    Filter(func(n int) bool { return n%1000 == 0 }).
+    Take(3).
+    ToSlice()
+// [0, 1000, 2000]
+```
+
+### Alternar entre Eager e Lazy
+
+```go
+// Stream → Pipeline (para processamento lazy)
+result := stream.Of(items...).Lazy().Filter(pred).Take(10).ToSlice()
+
+// Pipeline → Stream (para operações somente-eager)
+chunks := stream.Naturals().Take(12).ToStream().Chunk(4)
+```
+
+### Ponte iter.Seq
+
+```go
+// Interoperabilidade com biblioteca padrão
+keys := stream.Collect(maps.Keys(myMap)).Sort(cmp).ToSlice()
+
+// Suporte for-range
+for v := range stream.Of(1, 2, 3).Iter() {
+    fmt.Println(v)
+}
+```
+
+## Benchmark
+
+10.000 elementos `int`, `Filter(par)` depois `Take(10)` — Apple M1:
+
+```
+Benchmark              ns/op     B/op    allocs/op
+─────────────────────────────────────────────────────
+NativeFilterTake         124      248        5
+PipelineFilterTake       315      464       13   ← lazy: 2.5x nativo
+StreamFilterTake      30,831  128,329       17   ← eager: escaneia tudo
+```
+
+Pipeline com `Filter+Take` é **~100x mais rápido** que Stream porque a avaliação lazy faz curto-circuito — processa elementos apenas até satisfazer `Take`.
+
+Escaneamento completo (sem terminação antecipada):
+
+```
+Benchmark              ns/op     B/op    allocs/op
+─────────────────────────────────────────────────────
+NativeFilter          18,746  128,249       16
+StreamFilter          30,529  128,249       16
+PipelineFilter        42,359  128,377       21
+NativeReduce           3,245        0        0
+StreamReduce           9,740        0        0
+```
+
+> Execute `go test -bench=. -benchmem ./...` para reproduzir.
 
 ## License
 
