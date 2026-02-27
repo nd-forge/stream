@@ -1,0 +1,98 @@
+name: Check Code
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.23', '1.24', '1.25']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: false
+
+      - name: Run tests
+        run: go test -v -race -count=1 ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          install-mode: goinstall
+
+  coverage:
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: false
+
+      - name: Check coverage
+        run: |
+          go test -coverprofile=coverage.out -covermode=atomic ./...
+          REPORT=$(go tool cover -func=coverage.out)
+          TOTAL=$(echo "$REPORT" | grep total | awk '{print $3}' | sed 's/%//')
+          echo "$REPORT"
+          echo ""
+          echo "Total coverage: ${TOTAL}%"
+          if (( $(echo "$TOTAL < 80.0" | bc -l) )); then
+            echo "::error::Coverage ${TOTAL}% is below 80% threshold"
+            exit 1
+          fi
+
+      - name: Update coverage badge
+        if: success()
+        run: |
+          go test -coverprofile=coverage.out -covermode=atomic ./...
+          TOTAL=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+
+          if (( $(echo "$TOTAL >= 90" | bc -l) )); then
+            COLOR="brightgreen"
+          elif (( $(echo "$TOTAL >= 80" | bc -l) )); then
+            COLOR="green"
+          elif (( $(echo "$TOTAL >= 70" | bc -l) )); then
+            COLOR="yellowgreen"
+          elif (( $(echo "$TOTAL >= 60" | bc -l) )); then
+            COLOR="yellow"
+          else
+            COLOR="red"
+          fi
+
+          sed -i "s|!\[coverage\](https://img.shields.io/badge/coverage-[^)]*)|![coverage](https://img.shields.io/badge/coverage-${TOTAL}%25-${COLOR})|g" README.md
+
+          if git diff --quiet README.md; then
+            echo "No badge change needed"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add README.md
+            git commit -m "update coverage badge to ${TOTAL}%"
+            git push origin HEAD:${{ github.head_ref }}
+          fi
