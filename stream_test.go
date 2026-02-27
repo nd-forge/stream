@@ -873,3 +873,367 @@ func TestIntegration_CollectFromIter(t *testing.T) {
 		t.Errorf("CollectFromIter: unexpected %v", result)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Early termination (yield returns false) coverage tests
+// ---------------------------------------------------------------------------
+
+func TestGenerate_EarlyBreak(t *testing.T) {
+	v, ok := stream.Generate(100, func(i int) int { return i }).First()
+	if !ok || v != 0 {
+		t.Errorf("Generate early break: expected 0, got %d", v)
+	}
+}
+
+func TestRepeatN_EarlyBreak(t *testing.T) {
+	result := stream.RepeatN("x", 100).Take(1).ToSlice()
+	if len(result) != 1 || result[0] != "x" {
+		t.Errorf("RepeatN early break: unexpected %v", result)
+	}
+}
+
+func TestReverse_EarlyBreak(t *testing.T) {
+	v, ok := stream.Of(1, 2, 3).Reverse().First()
+	if !ok || v != 3 {
+		t.Errorf("Reverse early break: expected 3, got %d", v)
+	}
+}
+
+func TestReverse_Empty(t *testing.T) {
+	result := stream.Of[int]().Reverse().ToSlice()
+	if len(result) != 0 {
+		t.Errorf("Reverse empty: expected empty, got %v", result)
+	}
+}
+
+func TestTake_EarlyBreak(t *testing.T) {
+	// Take(5) but consumer only takes 1
+	v, ok := stream.Of(1, 2, 3, 4, 5).Take(5).First()
+	if !ok || v != 1 {
+		t.Errorf("Take early break: expected 1, got %d", v)
+	}
+}
+
+func TestTakeNegative(t *testing.T) {
+	result := stream.Of(1, 2, 3).Take(-1).ToSlice()
+	if len(result) != 0 {
+		t.Errorf("Take(-1): expected empty, got %v", result)
+	}
+}
+
+func TestTakeLast_Zero(t *testing.T) {
+	result := stream.Of(1, 2, 3).TakeLast(0).ToSlice()
+	if len(result) != 0 {
+		t.Errorf("TakeLast(0): expected empty, got %v", result)
+	}
+}
+
+func TestTakeLast_MoreThanLength(t *testing.T) {
+	result := stream.Of(1, 2).TakeLast(10).ToSlice()
+	if len(result) != 2 || result[0] != 1 || result[1] != 2 {
+		t.Errorf("TakeLast(>len): expected [1 2], got %v", result)
+	}
+}
+
+func TestTakeLast_EarlyBreak(t *testing.T) {
+	v, ok := stream.Of(1, 2, 3, 4, 5).TakeLast(3).First()
+	if !ok || v != 3 {
+		t.Errorf("TakeLast early break: expected 3, got %d", v)
+	}
+}
+
+func TestTakeLast_Negative(t *testing.T) {
+	result := stream.Of(1, 2, 3).TakeLast(-1).ToSlice()
+	if len(result) != 0 {
+		t.Errorf("TakeLast(-1): expected empty, got %v", result)
+	}
+}
+
+func TestSkip_Zero(t *testing.T) {
+	result := stream.Of(1, 2, 3).Skip(0).ToSlice()
+	if len(result) != 3 {
+		t.Errorf("Skip(0): expected 3 elements, got %v", result)
+	}
+}
+
+func TestSkip_Negative(t *testing.T) {
+	result := stream.Of(1, 2, 3).Skip(-1).ToSlice()
+	if len(result) != 3 {
+		t.Errorf("Skip(-1): expected 3 elements, got %v", result)
+	}
+}
+
+func TestSkip_EarlyBreak(t *testing.T) {
+	v, ok := stream.Of(1, 2, 3, 4, 5).Skip(2).First()
+	if !ok || v != 3 {
+		t.Errorf("Skip early break: expected 3, got %d", v)
+	}
+}
+
+func TestTakeWhile_EarlyBreak(t *testing.T) {
+	// All elements pass predicate but consumer stops early
+	v, ok := stream.Of(1, 2, 3, 4, 5).
+		TakeWhile(func(n int) bool { return n < 10 }).
+		First()
+	if !ok || v != 1 {
+		t.Errorf("TakeWhile early break: expected 1, got %d", v)
+	}
+}
+
+func TestDropWhile_EarlyBreak(t *testing.T) {
+	v, ok := stream.Of(1, 2, 3, 4, 5).
+		DropWhile(func(n int) bool { return n < 3 }).
+		First()
+	if !ok || v != 3 {
+		t.Errorf("DropWhile early break: expected 3, got %d", v)
+	}
+}
+
+func TestDistinct_EarlyBreak(t *testing.T) {
+	v, ok := stream.Of("a", "b", "c").
+		Distinct(func(s string) string { return s }).
+		First()
+	if !ok || v != "a" {
+		t.Errorf("Distinct early break: expected 'a', got %s", v)
+	}
+}
+
+func TestShuffle_EarlyBreak(t *testing.T) {
+	v, ok := stream.Of(1, 2, 3, 4, 5).Shuffle().First()
+	if !ok {
+		t.Error("Shuffle early break: expected a value")
+	}
+	_ = v
+}
+
+func TestChain_EarlyBreakFirst(t *testing.T) {
+	// Break during the first stream
+	v, ok := stream.Of(1, 2, 3).Chain(stream.Of(4, 5, 6)).First()
+	if !ok || v != 1 {
+		t.Errorf("Chain early break first: expected 1, got %d", v)
+	}
+}
+
+func TestChain_EarlyBreakSecond(t *testing.T) {
+	// Break during the second stream
+	result := stream.Of(1).Chain(stream.Of(2, 3, 4)).Take(2).ToSlice()
+	if len(result) != 2 || result[0] != 1 || result[1] != 2 {
+		t.Errorf("Chain early break second: expected [1 2], got %v", result)
+	}
+}
+
+func TestFind_NotFound(t *testing.T) {
+	_, ok := stream.Of(1, 2, 3).Find(func(n int) bool { return n > 10 })
+	if ok {
+		t.Error("Find: should not find element > 10")
+	}
+}
+
+func TestAll_Empty(t *testing.T) {
+	result := stream.Of[int]().All(func(n int) bool { return n > 0 })
+	if !result {
+		t.Error("All on empty: should return true")
+	}
+}
+
+func TestAll_SomeFail(t *testing.T) {
+	result := stream.Of(1, 2, 3, 4, 5).All(func(n int) bool { return n < 3 })
+	if result {
+		t.Error("All: should return false when some fail")
+	}
+}
+
+func TestAvg_Empty(t *testing.T) {
+	avg := stream.Avg(stream.Of[int]())
+	if avg != 0 {
+		t.Errorf("Avg empty: expected 0, got %f", avg)
+	}
+}
+
+func TestAvgBy_Empty(t *testing.T) {
+	avg := stream.AvgBy(stream.Of[Product](), func(p Product) float64 { return p.Price })
+	if avg != 0 {
+		t.Errorf("AvgBy empty: expected 0, got %f", avg)
+	}
+}
+
+func TestChunk_Zero(t *testing.T) {
+	result := stream.Of(1, 2, 3).Chunk(0)
+	if result != nil {
+		t.Errorf("Chunk(0): expected nil, got %v", result)
+	}
+}
+
+func TestChunk_Negative(t *testing.T) {
+	result := stream.Of(1, 2, 3).Chunk(-1)
+	if result != nil {
+		t.Errorf("Chunk(-1): expected nil, got %v", result)
+	}
+}
+
+func TestMap_EarlyBreak(t *testing.T) {
+	v, ok := stream.Map(
+		stream.Of(1, 2, 3),
+		func(n int) string { return fmt.Sprintf("%d", n) },
+	).First()
+	if !ok || v != "1" {
+		t.Errorf("Map early break: expected '1', got %s", v)
+	}
+}
+
+func TestMapIndexed_EarlyBreak(t *testing.T) {
+	v, ok := stream.MapIndexed(
+		stream.Of("a", "b", "c"),
+		func(i int, s string) string { return fmt.Sprintf("%d:%s", i, s) },
+	).First()
+	if !ok || v != "0:a" {
+		t.Errorf("MapIndexed early break: expected '0:a', got %s", v)
+	}
+}
+
+func TestFlatMap_EarlyBreak(t *testing.T) {
+	v, ok := stream.FlatMap(
+		stream.Of(
+			User{Name: "Alice", Orders: []Order{{Product: "A"}, {Product: "B"}}},
+			User{Name: "Bob", Orders: []Order{{Product: "C"}}},
+		),
+		func(u User) []Order { return u.Orders },
+	).First()
+	if !ok || v.Product != "A" {
+		t.Errorf("FlatMap early break: expected product A, got %s", v.Product)
+	}
+}
+
+func TestFlatMap_EarlyBreakMidSlice(t *testing.T) {
+	// Break in the middle of a flattened slice
+	result := stream.FlatMap(
+		stream.Of([]int{1, 2, 3}, []int{4, 5, 6}),
+		func(s []int) []int { return s },
+	).Take(2).ToSlice()
+	if len(result) != 2 || result[0] != 1 || result[1] != 2 {
+		t.Errorf("FlatMap mid-slice break: expected [1 2], got %v", result)
+	}
+}
+
+func TestZip_EarlyBreak(t *testing.T) {
+	v, ok := stream.Zip(
+		stream.Of(1, 2, 3),
+		stream.Of("a", "b", "c"),
+	).First()
+	if !ok || v.First != 1 || v.Second != "a" {
+		t.Errorf("Zip early break: unexpected %v", v)
+	}
+}
+
+func TestFlatten_EarlyBreak(t *testing.T) {
+	v, ok := stream.Flatten(
+		stream.Of([]int{1, 2}, []int{3, 4}),
+	).First()
+	if !ok || v != 1 {
+		t.Errorf("Flatten early break: expected 1, got %d", v)
+	}
+}
+
+func TestFlatten_EarlyBreakMidSlice(t *testing.T) {
+	result := stream.Flatten(
+		stream.Of([]int{1, 2, 3}, []int{4, 5}),
+	).Take(2).ToSlice()
+	if len(result) != 2 || result[0] != 1 || result[1] != 2 {
+		t.Errorf("Flatten mid-slice break: expected [1 2], got %v", result)
+	}
+}
+
+func TestEnumerate_EarlyBreak(t *testing.T) {
+	v, ok := stream.Enumerate(stream.Of("a", "b", "c")).First()
+	if !ok || v.First != 0 || v.Second != "a" {
+		t.Errorf("Enumerate early break: unexpected %v", v)
+	}
+}
+
+func TestCollect2_EarlyBreak(t *testing.T) {
+	seq2 := func(yield func(string, int) bool) {
+		if !yield("a", 1) {
+			return
+		}
+		if !yield("b", 2) {
+			return
+		}
+		yield("c", 3)
+	}
+	v, ok := stream.Collect2(seq2).First()
+	if !ok || v.First != "a" || v.Second != 1 {
+		t.Errorf("Collect2 early break: unexpected %v", v)
+	}
+}
+
+func TestLast_Empty(t *testing.T) {
+	_, ok := stream.Of[int]().Last()
+	if ok {
+		t.Error("Last on empty: should return false")
+	}
+}
+
+func TestMinBy_Empty(t *testing.T) {
+	_, ok := stream.Of[int]().MinBy(func(a, b int) bool { return a < b })
+	if ok {
+		t.Error("MinBy on empty: should return false")
+	}
+}
+
+func TestMaxBy_Empty(t *testing.T) {
+	_, ok := stream.Of[int]().MaxBy(func(a, b int) bool { return a < b })
+	if ok {
+		t.Error("MaxBy on empty: should return false")
+	}
+}
+
+func TestMin_Empty(t *testing.T) {
+	_, ok := stream.Min(stream.Of[int]())
+	if ok {
+		t.Error("Min on empty: should return false")
+	}
+}
+
+func TestMax_Empty(t *testing.T) {
+	_, ok := stream.Max(stream.Of[int]())
+	if ok {
+		t.Error("Max on empty: should return false")
+	}
+}
+
+func TestContains(t *testing.T) {
+	if !stream.Of(1, 2, 3).Contains(func(n int) bool { return n == 2 }) {
+		t.Error("Contains: should find 2")
+	}
+	if stream.Of(1, 2, 3).Contains(func(n int) bool { return n == 5 }) {
+		t.Error("Contains: should not find 5")
+	}
+}
+
+func TestToSlice_Empty(t *testing.T) {
+	result := stream.Of[int]().ToSlice()
+	if result == nil || len(result) != 0 {
+		t.Errorf("ToSlice empty: expected non-nil empty slice, got %v", result)
+	}
+}
+
+func TestSkip_AllElements(t *testing.T) {
+	result := stream.Of(1, 2, 3).Skip(5).ToSlice()
+	if len(result) != 0 {
+		t.Errorf("Skip all: expected empty, got %v", result)
+	}
+}
+
+func TestTakeWhile_NoneMatch(t *testing.T) {
+	result := stream.Of(5, 6, 7).TakeWhile(func(n int) bool { return n < 5 }).ToSlice()
+	if len(result) != 0 {
+		t.Errorf("TakeWhile none: expected empty, got %v", result)
+	}
+}
+
+func TestDropWhile_AllMatch(t *testing.T) {
+	result := stream.Of(1, 2, 3).DropWhile(func(n int) bool { return n < 10 }).ToSlice()
+	if len(result) != 0 {
+		t.Errorf("DropWhile all: expected empty, got %v", result)
+	}
+}
