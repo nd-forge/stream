@@ -10,7 +10,7 @@ type Number interface {
 // Sum returns the sum of all elements in a numeric Stream.
 func Sum[T Number](s Stream[T]) T {
 	var total T
-	for _, v := range s.data {
+	for v := range s.seq {
 		total += v
 	}
 	return total
@@ -18,50 +18,48 @@ func Sum[T Number](s Stream[T]) T {
 
 // Avg returns the average of all elements in a numeric Stream.
 func Avg[T Number](s Stream[T]) float64 {
-	if len(s.data) == 0 {
+	var total float64
+	count := 0
+	for v := range s.seq {
+		total += float64(v)
+		count++
+	}
+	if count == 0 {
 		return 0
 	}
-	var total float64
-	for _, v := range s.data {
-		total += float64(v)
-	}
-	return total / float64(len(s.data))
+	return total / float64(count)
 }
 
 // Min returns the minimum element in a numeric Stream.
 func Min[T Number](s Stream[T]) (T, bool) {
-	if len(s.data) == 0 {
-		var zero T
-		return zero, false
-	}
-	min := s.data[0]
-	for _, v := range s.data[1:] {
-		if v < min {
+	var min T
+	found := false
+	for v := range s.seq {
+		if !found || v < min {
 			min = v
+			found = true
 		}
 	}
-	return min, true
+	return min, found
 }
 
 // Max returns the maximum element in a numeric Stream.
 func Max[T Number](s Stream[T]) (T, bool) {
-	if len(s.data) == 0 {
-		var zero T
-		return zero, false
-	}
-	max := s.data[0]
-	for _, v := range s.data[1:] {
-		if v > max {
+	var max T
+	found := false
+	for v := range s.seq {
+		if !found || v > max {
 			max = v
+			found = true
 		}
 	}
-	return max, true
+	return max, found
 }
 
 // SumBy extracts a numeric value from each element and returns the sum.
 func SumBy[T any, N Number](s Stream[T], fn func(T) N) N {
 	var total N
-	for _, v := range s.data {
+	for v := range s.seq {
 		total += fn(v)
 	}
 	return total
@@ -69,12 +67,14 @@ func SumBy[T any, N Number](s Stream[T], fn func(T) N) N {
 
 // AvgBy extracts a numeric value from each element and returns the average.
 func AvgBy[T any, N Number](s Stream[T], fn func(T) N) float64 {
-	if len(s.data) == 0 {
+	var total float64
+	count := 0
+	for v := range s.seq {
+		total += float64(fn(v))
+		count++
+	}
+	if count == 0 {
 		return 0
 	}
-	var total float64
-	for _, v := range s.data {
-		total += float64(fn(v))
-	}
-	return total / float64(len(s.data))
+	return total / float64(count)
 }

@@ -32,10 +32,10 @@ type Order struct {
 
 func main() {
 	// =====================================================================
-	// Part 1: Stream (Eager Evaluation)
+	// Part 1: Basic Operations
 	// =====================================================================
 	fmt.Println("╔═══════════════════════════════════════════════════════════╗")
-	fmt.Println("║           Part 1: Stream (Eager Evaluation)             ║")
+	fmt.Println("║              Part 1: Basic Operations                    ║")
 	fmt.Println("╚═══════════════════════════════════════════════════════════╝")
 
 	// ===== Constructors =====
@@ -84,9 +84,17 @@ func main() {
 	// ===== Map (type-changing) =====
 	fmt.Println("\n=== Map ===")
 
-	categories := stream.Map(products, func(p Product) string {
-		return p.Category
-	}).Distinct(func(s string) string { return s }).ToSlice()
+	categories := stream.Map(
+		stream.Of(
+			Product{Name: "Laptop", Category: "Electronics", Price: 1200, InStock: true},
+			Product{Name: "T-Shirt", Category: "Clothing", Price: 25, InStock: true},
+			Product{Name: "Headphones", Category: "Electronics", Price: 150, InStock: false},
+			Product{Name: "Jeans", Category: "Clothing", Price: 80, InStock: true},
+			Product{Name: "Keyboard", Category: "Electronics", Price: 75, InStock: true},
+			Product{Name: "Sneakers", Category: "Clothing", Price: 120, InStock: false},
+		), func(p Product) string {
+			return p.Category
+		}).Distinct(func(s string) string { return s }).ToSlice()
 
 	fmt.Println("Unique categories:", categories)
 
@@ -112,33 +120,77 @@ func main() {
 	)
 	fmt.Printf("Active user orders: %d\n", allOrders.Count())
 
-	allOrders.ForEach(func(o Order) {
+	// Re-create because Count consumed it
+	allOrders2 := stream.FlatMap(
+		stream.Of(
+			User{Name: "Alice", Age: 30, IsActive: true, Orders: []Order{
+				{Product: "Laptop", Amount: 1200, Discount: 0.1},
+				{Product: "Mouse", Amount: 50, Discount: 0},
+			}},
+			User{Name: "Bob", Age: 17, IsActive: true, Orders: []Order{
+				{Product: "Keyboard", Amount: 80, Discount: 0.5},
+			}},
+		).Filter(func(u User) bool { return u.IsActive }),
+		func(u User) []Order { return u.Orders },
+	)
+
+	allOrders2.ForEach(func(o Order) {
 		fmt.Printf("  %s: $%.0f (%.0f%% off)\n", o.Product, o.Amount, o.Discount*100)
 	})
 
 	// ===== Reduce (type-changing) =====
 	fmt.Println("\n=== Reduce ===")
 
-	total := stream.Reduce(allOrders, 0.0, func(acc float64, o Order) float64 {
-		return acc + o.Amount*(1-o.Discount)
-	})
+	total := stream.Reduce(
+		stream.FlatMap(
+			stream.Of(
+				User{Name: "Alice", Age: 30, IsActive: true, Orders: []Order{
+					{Product: "Laptop", Amount: 1200, Discount: 0.1},
+					{Product: "Mouse", Amount: 50, Discount: 0},
+				}},
+				User{Name: "Bob", Age: 17, IsActive: true, Orders: []Order{
+					{Product: "Keyboard", Amount: 80, Discount: 0.5},
+				}},
+			).Filter(func(u User) bool { return u.IsActive }),
+			func(u User) []Order { return u.Orders },
+		),
+		0.0,
+		func(acc float64, o Order) float64 {
+			return acc + o.Amount*(1-o.Discount)
+		},
+	)
 	fmt.Printf("Total after discount: $%.2f\n", total)
 
 	// ===== GroupBy =====
 	fmt.Println("\n=== GroupBy ===")
 
-	byCategory := stream.GroupBy(products, func(p Product) string { return p.Category })
+	byCategory := stream.GroupBy(
+		stream.Of(
+			Product{Name: "Laptop", Category: "Electronics", Price: 1200, InStock: true},
+			Product{Name: "T-Shirt", Category: "Clothing", Price: 25, InStock: true},
+			Product{Name: "Headphones", Category: "Electronics", Price: 150, InStock: false},
+			Product{Name: "Jeans", Category: "Clothing", Price: 80, InStock: true},
+			Product{Name: "Keyboard", Category: "Electronics", Price: 75, InStock: true},
+			Product{Name: "Sneakers", Category: "Clothing", Price: 120, InStock: false},
+		),
+		func(p Product) string { return p.Category },
+	)
 	for category, group := range byCategory {
-		totalPrice := stream.SumBy(group, func(p Product) float64 { return p.Price })
-		fmt.Printf("  %s: total=$%.0f (%d products)\n", category, totalPrice, group.Count())
+		totalPrice := stream.SumBy(stream.Of(group...), func(p Product) float64 { return p.Price })
+		fmt.Printf("  %s: total=$%.0f (%d products)\n", category, totalPrice, len(group))
 	}
 
 	// ===== Associate =====
 	fmt.Println("\n=== Associate ===")
 
-	nameToAge := stream.Associate(users, func(u User) (string, int) {
-		return u.Name, u.Age
-	})
+	nameToAge := stream.Associate(
+		stream.Of(
+			User{Name: "Alice", Age: 30},
+			User{Name: "Bob", Age: 25},
+			User{Name: "Charlie", Age: 25},
+		),
+		func(u User) (string, int) { return u.Name, u.Age },
+	)
 	fmt.Println("Name->Age:", nameToAge)
 
 	// ===== Zip =====
@@ -154,7 +206,12 @@ func main() {
 	// ===== Partition =====
 	fmt.Println("\n=== Partition ===")
 
-	inStock, outOfStock := products.Partition(func(p Product) bool { return p.InStock })
+	inStock, outOfStock := stream.Of(
+		Product{Name: "Laptop", Price: 1200, InStock: true},
+		Product{Name: "Headphones", Price: 150, InStock: false},
+		Product{Name: "Keyboard", Price: 75, InStock: true},
+		Product{Name: "Sneakers", Price: 120, InStock: false},
+	).Partition(func(p Product) bool { return p.InStock })
 	fmt.Printf("In stock: %d, Out of stock: %d\n", inStock.Count(), outOfStock.Count())
 
 	// ===== Chunk (batch processing) =====
@@ -170,13 +227,23 @@ func main() {
 
 	values := stream.Of(10.0, 20.0, 30.0, 40.0, 50.0)
 	fmt.Printf("Sum: %.0f\n", stream.Sum(values))
-	fmt.Printf("Avg: %.1f\n", stream.Avg(values))
+	fmt.Printf("Avg: %.1f\n", stream.Avg(stream.Of(10.0, 20.0, 30.0, 40.0, 50.0)))
 
-	min, _ := stream.Min(values)
-	max, _ := stream.Max(values)
+	min, _ := stream.Min(stream.Of(10.0, 20.0, 30.0, 40.0, 50.0))
+	max, _ := stream.Max(stream.Of(10.0, 20.0, 30.0, 40.0, 50.0))
 	fmt.Printf("Min: %.0f, Max: %.0f\n", min, max)
 
-	avgPrice := stream.AvgBy(products, func(p Product) float64 { return p.Price })
+	avgPrice := stream.AvgBy(
+		stream.Of(
+			Product{Price: 1200},
+			Product{Price: 150},
+			Product{Price: 75},
+			Product{Price: 80},
+			Product{Price: 25},
+			Product{Price: 120},
+		),
+		func(p Product) float64 { return p.Price },
+	)
 	fmt.Printf("Avg product price: $%.2f\n", avgPrice)
 
 	// ===== Text processing =====
@@ -193,38 +260,12 @@ func main() {
 
 	fmt.Println("Unique words (sorted by length, uppercased):", result)
 
-	// ===== Complex pipeline =====
-	fmt.Println("\n=== Complex Pipeline ===")
-
-	savings := stream.Reduce(
-		stream.FlatMap(
-			users.
-				Filter(func(u User) bool { return u.IsActive }).
-				Filter(func(u User) bool { return u.Age >= 20 }),
-			func(u User) []Order { return u.Orders },
-		).Filter(func(o Order) bool { return o.Discount > 0 }),
-		0.0,
-		func(acc float64, o Order) float64 {
-			return acc + o.Amount*o.Discount
-		},
-	)
-	fmt.Printf("Total savings from discounts: $%.2f\n", savings)
-
 	// =====================================================================
-	// Part 2: Pipeline (Lazy Evaluation)
+	// Part 2: Infinite Sequences & Lazy Evaluation
 	// =====================================================================
 	fmt.Println("\n╔═══════════════════════════════════════════════════════════╗")
-	fmt.Println("║          Part 2: Pipeline (Lazy Evaluation)             ║")
+	fmt.Println("║      Part 2: Infinite Sequences & Lazy Evaluation       ║")
 	fmt.Println("╚═══════════════════════════════════════════════════════════╝")
-
-	// ===== Lazy constructors =====
-	fmt.Println("\n=== Lazy Constructors ===")
-
-	lazy := stream.Lazy(1, 2, 3, 4, 5)
-	fmt.Println("Lazy:", lazy.ToSlice())
-
-	lazyRange := stream.LazyRange(0, 5)
-	fmt.Println("LazyRange(0,5):", lazyRange.ToSlice())
 
 	// ===== Infinite sequences =====
 	fmt.Println("\n=== Infinite Sequences ===")
@@ -248,7 +289,7 @@ func main() {
 	// ===== Fibonacci sequence =====
 	fmt.Println("\n=== Fibonacci Sequence ===")
 
-	fib := stream.PipeMap(
+	fib := stream.Map(
 		stream.Iterate(
 			stream.Pair[int, int]{First: 0, Second: 1},
 			func(p stream.Pair[int, int]) stream.Pair[int, int] {
@@ -263,9 +304,9 @@ func main() {
 	// ===== Lazy evaluation advantage =====
 	fmt.Println("\n=== Lazy Evaluation Advantage ===")
 
-	// Pipeline only processes elements until Take is satisfied
+	// Stream only processes elements until Take is satisfied
 	evaluated := 0
-	result2 := stream.LazyRange(0, 1_000_000).
+	result2 := stream.Range(0, 1_000_000).
 		Peek(func(int) { evaluated++ }).
 		Filter(func(n int) bool { return n%1000 == 0 }).
 		Take(3).
@@ -273,18 +314,16 @@ func main() {
 
 	fmt.Printf("Result: %v (evaluated only %d of 1,000,000 elements)\n", result2, evaluated)
 
-	// ===== Pipeline Filter + Sort + Take =====
-	fmt.Println("\n=== Pipeline: Filter + Sort + Take ===")
+	// ===== Filter + Sort + Take =====
+	fmt.Println("\n=== Filter + Sort + Take ===")
 
-	lazyProducts := stream.Lazy(
+	topProducts := stream.Of(
 		Product{Name: "Laptop", Category: "Electronics", Price: 1200, InStock: true},
 		Product{Name: "T-Shirt", Category: "Clothing", Price: 25, InStock: true},
 		Product{Name: "Headphones", Category: "Electronics", Price: 150, InStock: false},
 		Product{Name: "Jeans", Category: "Clothing", Price: 80, InStock: true},
 		Product{Name: "Keyboard", Category: "Electronics", Price: 75, InStock: true},
-	)
-
-	topLazy := lazyProducts.
+	).
 		Filter(func(p Product) bool { return p.InStock }).
 		Sort(func(a, b Product) int {
 			if a.Price > b.Price {
@@ -298,157 +337,46 @@ func main() {
 		Take(2).
 		ToSlice()
 
-	fmt.Println("Top 2 in-stock (lazy):")
-	for _, p := range topLazy {
+	fmt.Println("Top 2 in-stock:")
+	for _, p := range topProducts {
 		fmt.Printf("  %s: $%.0f\n", p.Name, p.Price)
 	}
 
-	// ===== Pipeline transform functions =====
-	fmt.Println("\n=== Pipeline Transforms ===")
+	// ===== Chain: concatenate streams =====
+	fmt.Println("\n=== Chain ===")
 
-	// PipeMap: type-changing
-	pipeNames := stream.PipeMap(
-		stream.Lazy(
-			User{Name: "Alice", Age: 30, IsActive: true},
-			User{Name: "Bob", Age: 17, IsActive: true},
-			User{Name: "Charlie", Age: 25, IsActive: false},
-		).Filter(func(u User) bool { return u.IsActive }),
-		func(u User) string { return u.Name },
-	).ToSlice()
-	fmt.Println("Active user names (PipeMap):", pipeNames)
-
-	// PipeFlatMap
-	pipeOrders := stream.PipeFlatMap(
-		stream.Lazy(
-			User{Name: "Alice", Orders: []Order{{Product: "A"}, {Product: "B"}}},
-			User{Name: "Bob", Orders: []Order{{Product: "C"}}},
-		),
-		func(u User) []Order { return u.Orders },
-	)
-	fmt.Printf("All orders (PipeFlatMap): %d\n", pipeOrders.Count())
-
-	// PipeZip
-	pipeZip := stream.PipeZip(
-		stream.Lazy("Alice", "Bob", "Charlie"),
-		stream.Lazy(85, 92, 78),
-	).ToSlice()
-	fmt.Println("Zip:")
-	for _, p := range pipeZip {
-		fmt.Printf("  %s: %d\n", p.First, p.Second)
-	}
-
-	// PipeEnumerate
-	enumerated := stream.PipeEnumerate(stream.Lazy("a", "b", "c")).ToSlice()
-	fmt.Println("Enumerate:")
-	for _, p := range enumerated {
-		fmt.Printf("  [%d] %s\n", p.First, p.Second)
-	}
-
-	// PipeGroupBy
-	groups := stream.PipeGroupBy(
-		stream.Lazy(
-			Product{Name: "Laptop", Category: "Electronics"},
-			Product{Name: "T-Shirt", Category: "Clothing"},
-			Product{Name: "Keyboard", Category: "Electronics"},
-		),
-		func(p Product) string { return p.Category },
-	)
-	fmt.Println("GroupBy (Pipeline):")
-	for k, v := range groups {
-		fmt.Printf("  %s: %d items\n", k, len(v))
-	}
-
-	// PipeReduce
-	pipeTotal := stream.PipeReduce(
-		stream.Lazy(
-			Order{Amount: 100, Discount: 0.1},
-			Order{Amount: 200, Discount: 0.2},
-		),
-		0.0,
-		func(acc float64, o Order) float64 { return acc + o.Amount*(1-o.Discount) },
-	)
-	fmt.Printf("Total (PipeReduce): $%.2f\n", pipeTotal)
-
-	// ===== Chain: concatenate pipelines =====
-	fmt.Println("\n=== Pipeline Chain ===")
-
-	p1 := stream.Lazy(1, 2, 3)
-	p2 := stream.Lazy(4, 5, 6)
+	p1 := stream.Of(1, 2, 3)
+	p2 := stream.Of(4, 5, 6)
 	chained := p1.Chain(p2).ToSlice()
 	fmt.Println("Chain:", chained)
 
-	// ===== Pipeline terminal operations =====
-	fmt.Println("\n=== Pipeline Terminal Operations ===")
-
-	pipe := stream.Lazy(10, 20, 30, 40, 50)
-
-	first, _ := pipe.First()
-	fmt.Println("First:", first)
-
-	last, _ := pipe.Last()
-	fmt.Println("Last:", last)
-
-	found, _ := pipe.Find(func(n int) bool { return n > 25 })
-	fmt.Println("Find(>25):", found)
-
-	sum := pipe.Reduce(0, func(acc, v int) int { return acc + v })
-	fmt.Println("Reduce(sum):", sum)
-
-	fmt.Println("Any(>40):", pipe.Any(func(n int) bool { return n > 40 }))
-	fmt.Println("All(>0):", pipe.All(func(n int) bool { return n > 0 }))
-	fmt.Println("None(>100):", pipe.None(func(n int) bool { return n > 100 }))
-	fmt.Println("Count:", pipe.Count())
-
 	// =====================================================================
-	// Part 3: Stream <-> Pipeline Bridge
+	// Part 3: iter.Seq Bridge
 	// =====================================================================
 	fmt.Println("\n╔═══════════════════════════════════════════════════════════╗")
-	fmt.Println("║        Part 3: Stream <-> Pipeline Bridge               ║")
+	fmt.Println("║              Part 3: iter.Seq Bridge                     ║")
 	fmt.Println("╚═══════════════════════════════════════════════════════════╝")
 
-	// ===== Stream -> Pipeline (lazy mode) =====
-	fmt.Println("\n=== Stream -> Pipeline (.Lazy()) ===")
+	// ===== Stream.Seq() -> for range =====
+	fmt.Println("\n=== Seq() ===")
 
-	eagerStream := stream.Of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-	lazyResult := eagerStream.
-		Lazy(). // Switch to lazy evaluation
-		Filter(func(n int) bool { return n%2 == 0 }).
-		Take(3).
-		ToSlice()
-	fmt.Println("Stream.Lazy().Filter().Take(3):", lazyResult)
-
-	// ===== Pipeline -> Stream (eager mode) =====
-	fmt.Println("\n=== Pipeline -> Stream (.ToStream()) ===")
-
-	lazyPipe := stream.Naturals().
-		Filter(func(n int) bool { return n%3 == 0 }).
-		Take(6)
-
-	// Convert to Stream to use Stream-only operations
-	chunks := lazyPipe.ToStream().Chunk(3)
-	fmt.Println("Pipeline.ToStream().Chunk(3):")
-	for i, c := range chunks {
-		fmt.Printf("  Chunk %d: %v\n", i, c.ToSlice())
-	}
-
-	// ===== iter.Seq bridge =====
-	fmt.Println("\n=== iter.Seq Bridge ===")
-
-	// Stream -> iter.Seq -> for range
-	fmt.Print("Stream.Iter(): ")
-	for v := range stream.Of(1, 2, 3).Iter() {
+	fmt.Print("Seq(): ")
+	for v := range stream.Of(1, 2, 3).Seq() {
 		fmt.Printf("%d ", v)
 	}
 	fmt.Println()
 
-	// Stream -> iter.Seq2 -> for range (with index)
-	fmt.Print("Stream.Iter2(): ")
-	for i, v := range stream.Of("a", "b", "c").Iter2() {
-		fmt.Printf("%d:%s ", i, v)
+	// ===== Enumerate =====
+	fmt.Println("\n=== Enumerate ===")
+
+	enumerated := stream.Enumerate(stream.Of("a", "b", "c")).ToSlice()
+	for _, p := range enumerated {
+		fmt.Printf("  [%d] %s\n", p.First, p.Second)
 	}
-	fmt.Println()
 
 	// maps.Keys -> Collect -> Stream operations
+	fmt.Println("\n=== Collect from maps ===")
+
 	m := map[string]int{"Go": 1, "Rust": 2, "Python": 3}
 	sorted := stream.Collect(maps.Keys(m)).
 		Sort(func(a, b string) int { return strings.Compare(a, b) }).
@@ -459,28 +387,21 @@ func main() {
 	pairs := stream.Collect2(maps.All(m)).ToSlice()
 	fmt.Printf("Collect2(maps.All): %d pairs\n", len(pairs))
 
-	// ===== Full interop: Stream -> iter.Seq -> Pipeline -> Stream =====
-	fmt.Println("\n=== Full Interop ===")
+	// ===== Practical example: Shuffle from infinite =====
+	fmt.Println("\n=== Practical: Infinite + Shuffle ===")
 
-	s := stream.Of(10, 20, 30, 40, 50) // Stream
-	seq := s.Iter()                     // Stream -> iter.Seq
-	p := stream.LazyFrom(seq)           // iter.Seq -> Pipeline
-	finalStream := p.                   // Pipeline operations
-					Filter(func(n int) bool { return n > 20 }).
-					ToStream()  // Pipeline -> Stream
-	finalSlice := finalStream.Reverse().ToSlice() // Stream operations
-	fmt.Println("Stream->iter.Seq->Pipeline->Stream:", finalSlice)
-
-	// ===== Practical example: Lazy filter, then eager Shuffle =====
-	fmt.Println("\n=== Practical: Lazy + Eager Hybrid ===")
-
-	// Use Pipeline for efficient filtering of large data, then Stream for Shuffle
 	multiples := stream.Naturals().
 		Filter(func(n int) bool { return n%7 == 0 }).
-		Skip(1).   // skip 0
-		Take(10).  // first 10 multiples of 7
-		ToStream() // switch to Stream for Shuffle
+		Skip(1).  // skip 0
+		Take(10). // first 10 multiples of 7
+		Shuffle()
 
-	fmt.Println("Multiples of 7 (shuffled):", multiples.Shuffle().ToSlice())
-	fmt.Println("Multiples of 7 (reversed):", multiples.Reverse().Take(5).ToSlice())
+	fmt.Println("Multiples of 7 (shuffled):", multiples.ToSlice())
+	fmt.Println("Multiples of 7 (reversed):", stream.Naturals().
+		Filter(func(n int) bool { return n%7 == 0 }).
+		Skip(1).
+		Take(10).
+		Reverse().
+		Take(5).
+		ToSlice())
 }

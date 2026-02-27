@@ -9,7 +9,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Stream constructors
+// Constructors
 // ---------------------------------------------------------------------------
 
 func ExampleOf() {
@@ -40,6 +40,36 @@ func ExampleGenerate() {
 	squares := stream.Generate(5, func(i int) int { return i * i }).ToSlice()
 	fmt.Println(squares)
 	// Output: [0 1 4 9 16]
+}
+
+// ---------------------------------------------------------------------------
+// Generators (infinite sequences)
+// ---------------------------------------------------------------------------
+
+func ExampleRepeat() {
+	result := stream.Repeat(42).Take(3).ToSlice()
+	fmt.Println(result)
+	// Output: [42 42 42]
+}
+
+func ExampleRepeatN() {
+	result := stream.RepeatN("-", 4).ToSlice()
+	fmt.Println(result)
+	// Output: [- - - -]
+}
+
+func ExampleIterate() {
+	// Powers of 2: 1, 2, 4, 8, 16
+	result := stream.Iterate(1, func(n int) int { return n * 2 }).
+		Take(5).ToSlice()
+	fmt.Println(result)
+	// Output: [1 2 4 8 16]
+}
+
+func ExampleNaturals() {
+	result := stream.Naturals().Take(5).ToSlice()
+	fmt.Println(result)
+	// Output: [0 1 2 3 4]
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +185,14 @@ func ExampleStream_Partition() {
 	// odds: [1 3 5]
 }
 
+func ExampleStream_Chain() {
+	s1 := stream.Of(1, 2, 3)
+	s2 := stream.Of(4, 5, 6)
+	result := s1.Chain(s2).ToSlice()
+	fmt.Println(result)
+	// Output: [1 2 3 4 5 6]
+}
+
 // ---------------------------------------------------------------------------
 // Terminal operations
 // ---------------------------------------------------------------------------
@@ -257,6 +295,15 @@ func ExampleStream_MaxBy() {
 	// Output: 5
 }
 
+func ExampleStream_Seq() {
+	var result []int
+	for v := range stream.Of(1, 2, 3).Seq() {
+		result = append(result, v)
+	}
+	fmt.Println(result)
+	// Output: [1 2 3]
+}
+
 // ---------------------------------------------------------------------------
 // Top-level transform functions
 // ---------------------------------------------------------------------------
@@ -327,6 +374,15 @@ func ExampleToMap() {
 	// Output: 1 2 3
 }
 
+func ExampleEnumerate() {
+	result := stream.Enumerate(stream.Of("a", "b", "c")).ToSlice()
+	for _, p := range result {
+		fmt.Printf("%d:%s ", p.First, p.Second)
+	}
+	fmt.Println()
+	// Output: 0:a 1:b 2:c
+}
+
 // ---------------------------------------------------------------------------
 // Numeric functions
 // ---------------------------------------------------------------------------
@@ -357,23 +413,6 @@ func ExampleMax() {
 // iter.Seq bridge
 // ---------------------------------------------------------------------------
 
-func ExampleStream_Iter() {
-	var result []int
-	for v := range stream.Of(1, 2, 3).Iter() {
-		result = append(result, v)
-	}
-	fmt.Println(result)
-	// Output: [1 2 3]
-}
-
-func ExampleStream_Iter2() {
-	for i, v := range stream.Of("a", "b", "c").Iter2() {
-		fmt.Printf("%d:%s ", i, v)
-	}
-	fmt.Println()
-	// Output: 0:a 1:b 2:c
-}
-
 func ExampleCollect() {
 	m := map[string]int{"x": 1, "y": 2, "z": 3}
 	s := stream.Collect(maps.Values(m)).
@@ -391,7 +430,7 @@ func ExampleCollect2() {
 }
 
 // ---------------------------------------------------------------------------
-// Chaining example (README showcase)
+// Showcase examples
 // ---------------------------------------------------------------------------
 
 func Example_chaining() {
@@ -413,4 +452,29 @@ func Example_textProcessing() {
 	result := stream.Map(words, strings.ToUpper).ToSlice()
 	fmt.Println(result)
 	// Output: [GO HELLO WORLD STREAM]
+}
+
+func Example_lazyFilterTake() {
+	// Lazy evaluation: only evaluates elements as needed
+	result := stream.Naturals().
+		Filter(func(n int) bool { return n%2 == 0 }).
+		Take(5).
+		ToSlice()
+	fmt.Println(result)
+	// Output: [0 2 4 6 8]
+}
+
+func Example_fibonacci() {
+	// Fibonacci sequence using Iterate with Pair
+	fib := stream.Map(
+		stream.Iterate(
+			stream.Pair[int, int]{First: 0, Second: 1},
+			func(p stream.Pair[int, int]) stream.Pair[int, int] {
+				return stream.Pair[int, int]{First: p.Second, Second: p.First + p.Second}
+			},
+		).Take(10),
+		func(p stream.Pair[int, int]) int { return p.First },
+	).ToSlice()
+	fmt.Println(fib)
+	// Output: [0 1 1 2 3 5 8 13 21 34]
 }

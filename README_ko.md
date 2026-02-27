@@ -2,7 +2,9 @@
 
 [English](README.md) | [日本語](README_ja.md) | [中文](README_zh.md) | **한국어** | [Español](README_es.md) | [Português](README_pt.md)
 
-Go 제네릭 스트림 처리 라이브러리. filter, map, sort, group 등의 컬렉션 연산을 메서드 체이닝으로 작성할 수 있습니다 — **즉시 평가** (`Stream`)와 **지연 평가** (`Pipeline`) 모두 지원.
+Go 제네릭 스트림 처리 라이브러리. filter, map, sort, group 등의 컬렉션 연산을 메서드 체이닝으로 작성할 수 있습니다 — 기본적으로 **지연 평가**를 지원합니다.
+
+모든 연산은 지연 평가됩니다. 전체 데이터가 필요한 연산(Sort, Reverse, Shuffle, TakeLast, Chunk, Partition)은 내부적으로 버퍼링한 후 자동으로 지연 이터레이션을 재개합니다.
 
 ## 설치
 
@@ -32,14 +34,11 @@ names := stream.Map(
 
 ## 설계 방침
 
-### 즉시 평가 vs 지연 평가
+### 기본 지연 평가
 
-| 타입 | 평가 방식 | 최적 용도 |
-|---|---|---|
-| `Stream[T]` | **즉시 평가** — 중간 슬라이스 생성 | 소/중규모 데이터, 랜덤 액세스 (`Shuffle`, `Chunk`, `TakeLast`) |
-| `Pipeline[T]` | **지연 평가** — 중간 할당 제로 | 대규모 데이터, 무한 시퀀스, 조기 종료 (`Filter+Take`) |
+모든 연산은 `iter.Seq[T]`를 사용하여 내부적으로 지연 파이프라인을 구축합니다. 종단 연산(`ToSlice`, `ForEach`, `Reduce` 등)이 호출될 때까지 중간 슬라이스가 할당되지 않습니다.
 
-자유롭게 전환: `stream.Lazy()` / `pipeline.ToStream()`
+본질적으로 전체 데이터가 필요한 연산 — `Sort`, `Reverse`, `Shuffle`, `TakeLast`, `Chunk`, `Partition` — 은 내부적으로 버퍼링한 후, 이후 연산에 대해 지연 이터레이션을 재개합니다.
 
 ### 타입 파라미터
 
@@ -61,6 +60,15 @@ Go에서는 메서드에 새로운 타입 파라미터를 추가할 수 없습�
 | `Range(start, end)` | 정수 시퀀스 `[start, end)` |
 | `Generate[T](n, fn)` | 생성 함수로 n개 요소 생성 |
 
+### 생성기 (무한 시퀀스)
+
+| 함수 | 설명 |
+|---|---|
+| `Naturals()` | 0, 1, 2, 3, ... |
+| `Iterate(seed, fn)` | seed, fn(seed), fn(fn(seed)), ... |
+| `Repeat(value)` | 값의 무한 반복 |
+| `RepeatN(value, n)` | 값을 n번 반복 |
+
 ### 체이닝 가능 메서드
 
 `Stream[T]`을 반환하며 체이닝할 수 있는 연산.
@@ -77,6 +85,9 @@ Go에서는 메서드에 새로운 타입 파라미터를 추가할 수 없습�
 | `Distinct(key)` | 키 기반 중복 제거 |
 | `Shuffle()` | 랜덤 순서 |
 | `Peek(fn)` | 부수 효과 실행 (수정 없음) |
+| `Chain(others...)` | 여러 스트림 연결 |
+
+> `Sort`, `Reverse`, `Shuffle`, `TakeLast`는 내부적으로 모든 요소를 버퍼링합니다.
 
 ### 종단 연산
 
@@ -94,6 +105,7 @@ Go에서는 메서드에 새로운 타입 파라미터를 추가할 수 없습�
 | `Partition(pred)` | `(Stream[T], Stream[T])` |
 | `Chunk(size)` | `[]Stream[T]` |
 | `ForEach(fn)` / `ForEachIndexed(fn)` | — |
+| `Seq()` | `iter.Seq[T]` |
 
 ### 변환 함수
 
@@ -105,11 +117,12 @@ Go에서는 메서드에 새로운 타입 파라미터를 추가할 수 없습�
 | `MapIndexed(s, fn)` | 인덱스 포함 변환 |
 | `FlatMap(s, fn)` | 변환 후 평탄화 `T → []U` |
 | `Reduce(s, initial, fn)` | 다른 타입으로 폴딩 `T → U` |
-| `GroupBy(s, key)` | 키로 그룹화 `→ map[K]Stream[T]` |
+| `GroupBy(s, key)` | 키로 그룹화 `→ map[K][]T` |
 | `Associate(s, fn)` | 맵 구축 `→ map[K]V` |
 | `Zip(s1, s2)` | 두 스트림 페어링 `→ Stream[Pair[T,U]]` |
 | `Flatten(s)` | 평탄화 `Stream[[]T] → Stream[T]` |
 | `ToMap(s)` | 변환 `Stream[Pair[K,V]] → map[K]V` |
+| `Enumerate(s)` | 인덱스 추가 `→ Stream[Pair[int,T]]` |
 
 ### 수치 함수
 
@@ -121,57 +134,11 @@ Go에서는 메서드에 새로운 타입 파라미터를 추가할 수 없습�
 | `Min(s)` / `Max(s)` | 최솟값 / 최댓값 |
 | `SumBy(s, fn)` / `AvgBy(s, fn)` | 추출값의 합계 / 평균 |
 
-### Pipeline (지연 평가)
-
-#### 생성자
-
-| 함수 | 설명 |
-|---|---|
-| `Lazy[T](items ...T)` | 가변 인자에서 지연 파이프라인 생성 |
-| `LazyFrom[T](seq)` | `iter.Seq[T]`에서 생성 |
-| `LazyRange(start, end)` | 지연 정수 시퀀스 `[start, end)` |
-| `stream.Lazy()` | `Stream[T]` → `Pipeline[T]` 변환 |
-
-#### 생성기 (무한 시퀀스)
-
-| 함수 | 설명 |
-|---|---|
-| `Naturals()` | 0, 1, 2, 3, ... |
-| `Iterate(seed, fn)` | seed, fn(seed), fn(fn(seed)), ... |
-| `Repeat(value)` | 값의 무한 반복 |
-| `RepeatN(value, n)` | 값을 n번 반복 |
-
-#### 체이닝 가능 메서드
-
-Stream과 동일한 API: `Filter`, `Reject`, `Sort`, `Reverse`, `Take`, `Skip`, `TakeWhile`, `DropWhile`, `Distinct`, `Peek`, `Chain`
-
-#### 종단 연산
-
-Stream과 동일: `ToSlice`, `First`, `Last`, `Find`, `Reduce`, `Any`, `All`, `None`, `Count`, `CountBy`, `IsEmpty`, `Contains`, `MinBy`, `MaxBy`, `ForEach`, `ForEachIndexed`
-
-추가: `ToStream()` (즉시 Stream으로 변환), `Seq()` (기본 `iter.Seq[T]` 가져오기)
-
-#### 변환 함수 (타입 변환)
-
-| 함수 | 설명 |
-|---|---|
-| `PipeMap(p, fn)` | 변환 `T → U` |
-| `PipeMapIndexed(p, fn)` | 인덱스 포함 변환 |
-| `PipeFlatMap(p, fn)` | 변환 후 평탄화 `T → []U` |
-| `PipeReduce(p, initial, fn)` | 다른 타입으로 폴딩 `T → U` |
-| `PipeGroupBy(p, key)` | 키로 그룹화 `→ map[K][]T` |
-| `PipeAssociate(p, fn)` | 맵 구축 `→ map[K]V` |
-| `PipeZip(p1, p2)` | 두 파이프라인 페어링 `→ Pipeline[Pair[T,U]]` |
-| `PipeFlatten(p)` | 평탄화 `Pipeline[[]T] → Pipeline[T]` |
-| `PipeToMap(p)` | 변환 `Pipeline[Pair[K,V]] → map[K]V` |
-| `PipeEnumerate(p)` | 인덱스 추가 `→ Pipeline[Pair[int,T]]` |
-
 ### iter.Seq 브릿지
 
 | 함수 | 설명 |
 |---|---|
-| `stream.Iter()` | `Stream[T]` → `iter.Seq[T]` |
-| `stream.Iter2()` | `Stream[T]` → `iter.Seq2[int, T]` |
+| `Seq()` | `Stream[T]` → `iter.Seq[T]` |
 | `Collect(seq)` | `iter.Seq[T]` → `Stream[T]` |
 | `Collect2(seq)` | `iter.Seq2[K,V]` → `Stream[Pair[K,V]]` |
 
@@ -245,9 +212,8 @@ allOrders := stream.FlatMap(
 byCategory := stream.GroupBy(products, func(p Product) string { return p.Category })
 
 for category, group := range byCategory {
-    total := stream.SumBy(group, func(p Product) float64 { return p.Price })
-    avg := stream.AvgBy(group, func(p Product) float64 { return p.Price })
-    fmt.Printf("%s: total=$%.2f avg=$%.2f count=%d\n", category, total, avg, group.Count())
+    total := stream.SumBy(stream.Of(group...), func(p Product) float64 { return p.Price })
+    fmt.Printf("%s: total=$%.2f count=%d\n", category, total, len(group))
 }
 ```
 
@@ -274,10 +240,10 @@ pairs := stream.Zip(names, scores).ToSlice()
 // [{Alice 85}, {Bob 92}, {Charlie 78}]
 ```
 
-### Pipeline (지연 평가)
+### 무한 시퀀스
 
 ```go
-// 무한 시퀀스: 처음 5개의 짝수
+// 처음 5개의 짝수 자연수
 evens := stream.Naturals().
     Filter(func(n int) bool { return n%2 == 0 }).
     Take(5).
@@ -285,7 +251,7 @@ evens := stream.Naturals().
 // [0, 2, 4, 6, 8]
 
 // 피보나치 수열
-fib := stream.PipeMap(
+fib := stream.Map(
     stream.Iterate(
         stream.Pair[int, int]{First: 0, Second: 1},
         func(p stream.Pair[int, int]) stream.Pair[int, int] {
@@ -297,21 +263,11 @@ fib := stream.PipeMap(
 // [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
 
 // 지연 평가: 100만 요소 중 2,001개만 처리
-result := stream.LazyRange(0, 1_000_000).
+result := stream.Range(0, 1_000_000).
     Filter(func(n int) bool { return n%1000 == 0 }).
     Take(3).
     ToSlice()
 // [0, 1000, 2000]
-```
-
-### 즉시 평가와 지연 평가 전환
-
-```go
-// Stream → Pipeline (지연 처리로)
-result := stream.Of(items...).Lazy().Filter(pred).Take(10).ToSlice()
-
-// Pipeline → Stream (즉시 전용 연산으로)
-chunks := stream.Naturals().Take(12).ToStream().Chunk(4)
 ```
 
 ### iter.Seq 브릿지
@@ -321,7 +277,7 @@ chunks := stream.Naturals().Take(12).ToStream().Chunk(4)
 keys := stream.Collect(maps.Keys(myMap)).Sort(cmp).ToSlice()
 
 // for-range 지원
-for v := range stream.Of(1, 2, 3).Iter() {
+for v := range stream.Of(1, 2, 3).Seq() {
     fmt.Println(v)
 }
 ```
@@ -334,11 +290,10 @@ for v := range stream.Of(1, 2, 3).Iter() {
 벤치마크                ns/op     B/op    allocs/op
 ─────────────────────────────────────────────────────
 NativeFilterTake         124      248        5
-PipelineFilterTake       315      464       13   ← 지연: 네이티브의 2.5배
-StreamFilterTake      30,831  128,329       17   ← 즉시: 전체 스캔
+StreamFilterTake         315      464       13   ← 지연: 네이티브의 2.5배
 ```
 
-`Filter+Take`에서 Pipeline은 Stream보다 **약 100배 빠릅니다**. 지연 평가로 `Take`가 충족되면 즉시 중단하지만, Stream은 전체 슬라이스를 먼저 필터링합니다.
+지연 평가에 의한 쇼트서킷 — `Take`가 충족될 때까지만 요소를 처리합니다.
 
 전체 스캔 (조기 종료 없음):
 
@@ -346,8 +301,7 @@ StreamFilterTake      30,831  128,329       17   ← 즉시: 전체 스캔
 벤치마크                ns/op     B/op    allocs/op
 ─────────────────────────────────────────────────────
 NativeFilter          18,746  128,249       16
-StreamFilter          30,529  128,249       16
-PipelineFilter        42,359  128,377       21
+StreamFilter          42,359  128,377       21
 NativeReduce           3,245        0        0
 StreamReduce           9,740        0        0
 ```

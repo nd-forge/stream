@@ -54,9 +54,8 @@ func TestFrom(t *testing.T) {
 }
 
 func TestRange(t *testing.T) {
-	s := stream.Range(0, 5)
+	result := stream.Range(0, 5).ToSlice()
 	expected := []int{0, 1, 2, 3, 4}
-	result := s.ToSlice()
 	for i, v := range result {
 		if v != expected[i] {
 			t.Errorf("Range: expected %d at index %d, got %d", expected[i], i, v)
@@ -65,12 +64,69 @@ func TestRange(t *testing.T) {
 }
 
 func TestGenerate(t *testing.T) {
-	s := stream.Generate(5, func(i int) int { return i * i })
+	result := stream.Generate(5, func(i int) int { return i * i }).ToSlice()
 	expected := []int{0, 1, 4, 9, 16}
-	result := s.ToSlice()
 	for i, v := range result {
 		if v != expected[i] {
 			t.Errorf("Generate: expected %d, got %d", expected[i], v)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Generator tests (infinite sequences)
+// ---------------------------------------------------------------------------
+
+func TestRepeat(t *testing.T) {
+	result := stream.Repeat(42).Take(5).ToSlice()
+	if len(result) != 5 {
+		t.Errorf("Repeat: expected 5 elements, got %d", len(result))
+	}
+	for _, v := range result {
+		if v != 42 {
+			t.Errorf("Repeat: expected 42, got %d", v)
+		}
+	}
+}
+
+func TestRepeatN(t *testing.T) {
+	result := stream.RepeatN("x", 3).ToSlice()
+	if len(result) != 3 || result[0] != "x" {
+		t.Errorf("RepeatN: unexpected %v", result)
+	}
+}
+
+func TestIterate(t *testing.T) {
+	// Powers of 2: 1, 2, 4, 8, 16
+	result := stream.Iterate(1, func(n int) int { return n * 2 }).Take(5).ToSlice()
+	expected := []int{1, 2, 4, 8, 16}
+	for i, v := range result {
+		if v != expected[i] {
+			t.Errorf("Iterate: expected %d at %d, got %d", expected[i], i, v)
+		}
+	}
+}
+
+func TestNaturals(t *testing.T) {
+	result := stream.Naturals().Take(5).ToSlice()
+	expected := []int{0, 1, 2, 3, 4}
+	for i, v := range result {
+		if v != expected[i] {
+			t.Errorf("Naturals: expected %d at %d, got %d", expected[i], i, v)
+		}
+	}
+}
+
+func TestInfiniteFilterTake(t *testing.T) {
+	// First 5 even naturals: 0, 2, 4, 6, 8
+	result := stream.Naturals().
+		Filter(func(n int) bool { return n%2 == 0 }).
+		Take(5).
+		ToSlice()
+	expected := []int{0, 2, 4, 6, 8}
+	for i, v := range result {
+		if v != expected[i] {
+			t.Errorf("InfiniteFilterTake: expected %d at %d, got %d", expected[i], i, v)
 		}
 	}
 }
@@ -140,6 +196,13 @@ func TestTakeLast(t *testing.T) {
 	}
 }
 
+func TestTakeZero(t *testing.T) {
+	result := stream.Of(1, 2, 3).Take(0).ToSlice()
+	if len(result) != 0 {
+		t.Errorf("Take(0): expected empty, got %v", result)
+	}
+}
+
 func TestTakeWhileAndDropWhile(t *testing.T) {
 	s := stream.Of(1, 2, 3, 4, 5, 1, 2)
 
@@ -161,6 +224,52 @@ func TestDistinct(t *testing.T) {
 
 	if len(result) != 3 {
 		t.Errorf("Distinct: expected 3 unique, got %v", result)
+	}
+}
+
+func TestShuffle(t *testing.T) {
+	s := stream.Of(1, 2, 3, 4, 5).Shuffle()
+	result := s.ToSlice()
+	if len(result) != 5 {
+		t.Errorf("Shuffle: expected 5 elements, got %d", len(result))
+	}
+}
+
+func TestChain(t *testing.T) {
+	s1 := stream.Of(1, 2, 3)
+	s2 := stream.Of(4, 5, 6)
+	result := s1.Chain(s2).ToSlice()
+	if len(result) != 6 || result[3] != 4 {
+		t.Errorf("Chain: unexpected %v", result)
+	}
+}
+
+func TestSortThenTake(t *testing.T) {
+	// Sort buffers all, but Take after Sort is still lazy
+	result := stream.Of(5, 3, 1, 4, 2).
+		Sort(func(a, b int) int { return a - b }).
+		Take(3).
+		ToSlice()
+	expected := []int{1, 2, 3}
+	for i, v := range result {
+		if v != expected[i] {
+			t.Errorf("SortThenTake: expected %d at %d, got %d", expected[i], i, v)
+		}
+	}
+}
+
+func TestPeek(t *testing.T) {
+	var peeked []int
+	result := stream.Of(1, 2, 3).
+		Peek(func(n int) { peeked = append(peeked, n) }).
+		Filter(func(n int) bool { return n > 1 }).
+		ToSlice()
+
+	if len(peeked) != 3 {
+		t.Errorf("Peek: expected 3 peeks, got %d", len(peeked))
+	}
+	if len(result) != 2 {
+		t.Errorf("Peek: filter should produce 2, got %v", result)
 	}
 }
 
@@ -234,6 +343,32 @@ func TestAnyAllNone(t *testing.T) {
 	}
 }
 
+func TestCount(t *testing.T) {
+	n := stream.Of(1, 2, 3, 4, 5).
+		Filter(func(v int) bool { return v > 2 }).
+		Count()
+	if n != 3 {
+		t.Errorf("Count: expected 3, got %d", n)
+	}
+}
+
+func TestCountBy(t *testing.T) {
+	n := stream.Of(1, 2, 3, 4, 5).
+		CountBy(func(v int) bool { return v%2 == 0 })
+	if n != 2 {
+		t.Errorf("CountBy: expected 2, got %d", n)
+	}
+}
+
+func TestIsEmpty(t *testing.T) {
+	if !stream.Of[int]().IsEmpty() {
+		t.Error("IsEmpty: empty should return true")
+	}
+	if stream.Of(1).IsEmpty() {
+		t.Error("IsEmpty: non-empty should return false")
+	}
+}
+
 func TestMinByMaxBy(t *testing.T) {
 	products := stream.Of(
 		Product{Name: "Laptop", Price: 1200},
@@ -246,9 +381,50 @@ func TestMinByMaxBy(t *testing.T) {
 		t.Errorf("MaxBy: expected Laptop, got %s", most.Name)
 	}
 
-	least, _ := products.MinBy(func(a, b Product) bool { return a.Price < b.Price })
+	least, _ := stream.Of(
+		Product{Name: "Laptop", Price: 1200},
+		Product{Name: "Headphones", Price: 150},
+		Product{Name: "Keyboard", Price: 75},
+	).MinBy(func(a, b Product) bool { return a.Price < b.Price })
 	if least.Name != "Keyboard" {
 		t.Errorf("MinBy: expected Keyboard, got %s", least.Name)
+	}
+}
+
+func TestForEach(t *testing.T) {
+	var result []int
+	stream.Of(1, 2, 3).ForEach(func(v int) { result = append(result, v*2) })
+	if len(result) != 3 || result[0] != 2 || result[2] != 6 {
+		t.Errorf("ForEach: unexpected %v", result)
+	}
+}
+
+func TestForEachIndexed(t *testing.T) {
+	var indices []int
+	stream.Of("a", "b", "c").ForEachIndexed(func(i int, _ string) {
+		indices = append(indices, i)
+	})
+	if len(indices) != 3 || indices[2] != 2 {
+		t.Errorf("ForEachIndexed: unexpected %v", indices)
+	}
+}
+
+func TestReduce(t *testing.T) {
+	sum := stream.Of(1, 2, 3, 4, 5).
+		Reduce(0, func(acc, v int) int { return acc + v })
+	if sum != 15 {
+		t.Errorf("Reduce: expected 15, got %d", sum)
+	}
+}
+
+func TestSeq(t *testing.T) {
+	s := stream.Of(1, 2, 3)
+	var result []int
+	for v := range s.Seq() {
+		result = append(result, v)
+	}
+	if len(result) != 3 {
+		t.Errorf("Seq: unexpected %v", result)
 	}
 }
 
@@ -264,6 +440,17 @@ func TestMap(t *testing.T) {
 
 	if result[0] != "item_1" || result[2] != "item_3" {
 		t.Errorf("Map: unexpected %v", result)
+	}
+}
+
+func TestMapIndexed(t *testing.T) {
+	result := stream.MapIndexed(
+		stream.Of("a", "b", "c"),
+		func(i int, s string) string { return fmt.Sprintf("%d:%s", i, s) },
+	).ToSlice()
+
+	if result[0] != "0:a" || result[2] != "2:c" {
+		t.Errorf("MapIndexed: unexpected %v", result)
 	}
 }
 
@@ -288,10 +475,10 @@ func TestGroupBy(t *testing.T) {
 
 	groups := stream.GroupBy(products, func(p Product) string { return p.Category })
 
-	if groups["Electronics"].Count() != 2 {
+	if len(groups["Electronics"]) != 2 {
 		t.Errorf("GroupBy: expected 2 Electronics products")
 	}
-	if groups["Clothing"].Count() != 1 {
+	if len(groups["Clothing"]) != 1 {
 		t.Errorf("GroupBy: expected 1 Clothing product")
 	}
 }
@@ -303,6 +490,16 @@ func TestZip(t *testing.T) {
 	pairs := stream.Zip(names, scores).ToSlice()
 	if len(pairs) != 3 || pairs[0].First != "Alice" || pairs[0].Second != 85.0 {
 		t.Errorf("Zip: unexpected %v", pairs)
+	}
+}
+
+func TestZipUnevenLengths(t *testing.T) {
+	s1 := stream.Of(1, 2, 3, 4, 5)
+	s2 := stream.Of("a", "b")
+
+	pairs := stream.Zip(s1, s2).ToSlice()
+	if len(pairs) != 2 {
+		t.Errorf("Zip uneven: expected 2, got %d", len(pairs))
 	}
 }
 
@@ -321,7 +518,7 @@ func TestAssociate(t *testing.T) {
 	}
 }
 
-func TestReduce(t *testing.T) {
+func TestReduceTypeChanging(t *testing.T) {
 	total := stream.Reduce(
 		stream.Of(
 			Order{Amount: 100, Discount: 0.1},
@@ -337,6 +534,35 @@ func TestReduce(t *testing.T) {
 	expected := 90.0 + 160.0 + 300.0
 	if total != expected {
 		t.Errorf("Reduce: expected %.1f, got %.1f", expected, total)
+	}
+}
+
+func TestFlatten(t *testing.T) {
+	result := stream.Flatten(
+		stream.Of([]int{1, 2}, []int{3, 4}, []int{5}),
+	).ToSlice()
+	if len(result) != 5 || result[0] != 1 || result[4] != 5 {
+		t.Errorf("Flatten: unexpected %v", result)
+	}
+}
+
+func TestToMap(t *testing.T) {
+	m := stream.ToMap(stream.Zip(
+		stream.Of("a", "b", "c"),
+		stream.Of(1, 2, 3),
+	))
+	if m["a"] != 1 || m["c"] != 3 {
+		t.Errorf("ToMap: unexpected %v", m)
+	}
+}
+
+func TestEnumerate(t *testing.T) {
+	result := stream.Enumerate(stream.Of("a", "b", "c")).ToSlice()
+	if len(result) != 3 || result[0].First != 0 || result[0].Second != "a" {
+		t.Errorf("Enumerate: unexpected %v", result)
+	}
+	if result[2].First != 2 || result[2].Second != "c" {
+		t.Errorf("Enumerate: unexpected last %v", result[2])
 	}
 }
 
@@ -370,7 +596,12 @@ func TestSumByAvgBy(t *testing.T) {
 		t.Errorf("SumBy: expected 1425, got %f", total)
 	}
 
-	avg := stream.AvgBy(products, func(p Product) float64 { return p.Price })
+	products2 := stream.Of(
+		Product{Price: 1200},
+		Product{Price: 150},
+		Product{Price: 75},
+	)
+	avg := stream.AvgBy(products2, func(p Product) float64 { return p.Price })
 	expected := 1425.0 / 3.0
 	if avg < expected-0.01 || avg > expected+0.01 {
 		t.Errorf("AvgBy: expected ~%.2f, got %.2f", expected, avg)
@@ -385,9 +616,96 @@ func TestMinMax(t *testing.T) {
 		t.Errorf("Min: expected 1.0, got %f", min)
 	}
 
-	max, _ := stream.Max(s)
+	s2 := stream.Of(3.0, 1.0, 4.0, 1.0, 5.0)
+	max, _ := stream.Max(s2)
 	if max != 5.0 {
 		t.Errorf("Max: expected 5.0, got %f", max)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Lazy evaluation proof tests
+// ---------------------------------------------------------------------------
+
+func TestShortCircuit_Take(t *testing.T) {
+	// Prove that Take stops iteration early
+	evaluated := 0
+	result := stream.Of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10).
+		Peek(func(int) { evaluated++ }).
+		Take(3).
+		ToSlice()
+
+	if len(result) != 3 {
+		t.Errorf("ShortCircuit.Take: expected 3 elements, got %d", len(result))
+	}
+	if evaluated != 3 {
+		t.Errorf("ShortCircuit.Take: expected 3 evaluations, got %d (lazy broken!)", evaluated)
+	}
+}
+
+func TestShortCircuit_Find(t *testing.T) {
+	evaluated := 0
+	v, ok := stream.Of(1, 2, 3, 4, 5).
+		Peek(func(int) { evaluated++ }).
+		Find(func(n int) bool { return n == 3 })
+
+	if !ok || v != 3 {
+		t.Errorf("ShortCircuit.Find: expected 3, got %d", v)
+	}
+	if evaluated != 3 {
+		t.Errorf("ShortCircuit.Find: expected 3 evaluations, got %d", evaluated)
+	}
+}
+
+func TestShortCircuit_Any(t *testing.T) {
+	evaluated := 0
+	found := stream.Of(1, 2, 3, 4, 5).
+		Peek(func(int) { evaluated++ }).
+		Any(func(n int) bool { return n == 2 })
+
+	if !found {
+		t.Error("ShortCircuit.Any: should find 2")
+	}
+	if evaluated != 2 {
+		t.Errorf("ShortCircuit.Any: expected 2 evaluations, got %d", evaluated)
+	}
+}
+
+func TestNoAllocation_FilterTake(t *testing.T) {
+	evaluated := 0
+	result := stream.Range(0, 1_000_000).
+		Peek(func(int) { evaluated++ }).
+		Filter(func(n int) bool { return n%1000 == 0 }).
+		Take(3).
+		ToSlice()
+
+	if len(result) != 3 || result[0] != 0 || result[1] != 1000 || result[2] != 2000 {
+		t.Errorf("NoAllocation: unexpected %v", result)
+	}
+	// Should evaluate at most 2001 elements (0..2000), not 1_000_000
+	if evaluated > 2001 {
+		t.Errorf("NoAllocation: evaluated %d elements (should be ~2001)", evaluated)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Reusability test
+// ---------------------------------------------------------------------------
+
+func TestReusable(t *testing.T) {
+	s := stream.Of(1, 2, 3, 4, 5).Filter(func(n int) bool { return n > 2 })
+
+	// Calling ToSlice() multiple times should return same result
+	r1 := s.ToSlice()
+	r2 := s.ToSlice()
+
+	if len(r1) != len(r2) {
+		t.Errorf("Reusable: lengths differ %d vs %d", len(r1), len(r2))
+	}
+	for i := range r1 {
+		if r1[i] != r2[i] {
+			t.Errorf("Reusable: differ at %d: %d vs %d", i, r1[i], r2[i])
+		}
 	}
 }
 
@@ -425,10 +743,18 @@ func TestChaining_ProductAnalysis(t *testing.T) {
 	}
 
 	// カテゴリ別の価格合計
-	byCategory := stream.GroupBy(products, func(p Product) string { return p.Category })
+	products2 := stream.Of(
+		Product{Name: "Laptop", Category: "Electronics", Price: 1200, InStock: true},
+		Product{Name: "T-Shirt", Category: "Clothing", Price: 25, InStock: true},
+		Product{Name: "Headphones", Category: "Electronics", Price: 150, InStock: false},
+		Product{Name: "Jeans", Category: "Clothing", Price: 80, InStock: true},
+		Product{Name: "Keyboard", Category: "Electronics", Price: 75, InStock: true},
+		Product{Name: "Sneakers", Category: "Clothing", Price: 120, InStock: false},
+	)
+	byCategory := stream.GroupBy(products2, func(p Product) string { return p.Category })
 	for category, group := range byCategory {
-		totalPrice := stream.SumBy(group, func(p Product) float64 { return p.Price })
-		t.Logf("%s: total = %.2f (%d products)", category, totalPrice, group.Count())
+		totalPrice := stream.SumBy(stream.Of(group...), func(p Product) float64 { return p.Price })
+		t.Logf("%s: total = %.2f (%d products)", category, totalPrice, len(group))
 	}
 }
 
@@ -497,5 +823,53 @@ func TestChaining_BatchProcessing(t *testing.T) {
 		if batch.Count() != 20 {
 			t.Errorf("Batch %d: expected 20 items, got %d", i, batch.Count())
 		}
+	}
+}
+
+func TestIntegration_InfiniteSequence(t *testing.T) {
+	// Fibonacci sequence using Pair
+	fib := stream.Map(
+		stream.Iterate(
+			stream.Pair[int, int]{First: 0, Second: 1},
+			func(p stream.Pair[int, int]) stream.Pair[int, int] {
+				return stream.Pair[int, int]{First: p.Second, Second: p.First + p.Second}
+			},
+		).Take(10),
+		func(p stream.Pair[int, int]) int { return p.First },
+	).ToSlice()
+
+	expected := []int{0, 1, 1, 2, 3, 5, 8, 13, 21, 34}
+	for i, v := range fib {
+		if v != expected[i] {
+			t.Errorf("Fibonacci: expected %d at %d, got %d", expected[i], i, v)
+		}
+	}
+}
+
+func TestIntegration_ChunkFromInfinite(t *testing.T) {
+	// Use lazy Stream for filtering, then Chunk (buffers internally)
+	result := stream.Naturals().
+		Filter(func(n int) bool { return n%3 == 0 }).
+		Take(12).
+		Chunk(4)
+
+	if len(result) != 3 {
+		t.Errorf("ChunkFromInfinite: expected 3 chunks, got %d", len(result))
+	}
+	if result[0].Count() != 4 {
+		t.Errorf("ChunkFromInfinite: first chunk should have 4 elements, got %d", result[0].Count())
+	}
+}
+
+func TestIntegration_CollectFromIter(t *testing.T) {
+	// Show interop: iter.Seq → Stream
+	s := stream.Of(10, 20, 30, 40, 50)
+	seq := s.Seq()
+	result := stream.Collect(seq).
+		Filter(func(n int) bool { return n > 20 }).
+		ToSlice()
+
+	if len(result) != 3 || result[0] != 30 {
+		t.Errorf("CollectFromIter: unexpected %v", result)
 	}
 }

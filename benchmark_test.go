@@ -20,7 +20,7 @@ func init() {
 }
 
 // ---------------------------------------------------------------------------
-// Filter benchmarks: Native vs Stream vs Pipeline
+// Filter benchmarks: Native vs Stream
 // ---------------------------------------------------------------------------
 
 func BenchmarkNativeFilter(b *testing.B) {
@@ -39,13 +39,6 @@ func BenchmarkStreamFilter(b *testing.B) {
 	s := stream.From(benchData)
 	for b.Loop() {
 		_ = s.Filter(func(n int) bool { return n%2 == 0 }).ToSlice()
-	}
-}
-
-func BenchmarkPipelineFilter(b *testing.B) {
-	p := stream.Lazy(benchData...).Filter(func(n int) bool { return n%2 == 0 })
-	for b.Loop() {
-		_ = p.ToSlice()
 	}
 }
 
@@ -75,15 +68,6 @@ func BenchmarkStreamFilterTake(b *testing.B) {
 	}
 }
 
-func BenchmarkPipelineFilterTake(b *testing.B) {
-	p := stream.Lazy(benchData...).
-		Filter(func(n int) bool { return n%2 == 0 }).
-		Take(10)
-	for b.Loop() {
-		_ = p.ToSlice()
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Map + Filter benchmarks
 // ---------------------------------------------------------------------------
@@ -107,16 +91,6 @@ func BenchmarkStreamMapFilter(b *testing.B) {
 		_ = stream.Map(s, func(n int) int { return n * 2 }).
 			Filter(func(n int) bool { return n < 100 }).
 			ToSlice()
-	}
-}
-
-func BenchmarkPipelineMapFilter(b *testing.B) {
-	p := stream.PipeMap(
-		stream.Lazy(benchData...),
-		func(n int) int { return n * 2 },
-	).Filter(func(n int) bool { return n < 100 })
-	for b.Loop() {
-		_ = p.ToSlice()
 	}
 }
 
@@ -152,17 +126,6 @@ func BenchmarkStreamSort(b *testing.B) {
 	}
 }
 
-func BenchmarkPipelineSort(b *testing.B) {
-	data := make([]int, 1000)
-	for i := range data {
-		data[i] = 1000 - i
-	}
-	p := stream.Lazy(data...).Sort(func(a, b int) int { return a - b })
-	for b.Loop() {
-		_ = p.ToSlice()
-	}
-}
-
 // ---------------------------------------------------------------------------
 // Chained operations benchmark
 // ---------------------------------------------------------------------------
@@ -184,15 +147,15 @@ func BenchmarkNativeChained(b *testing.B) {
 	}
 }
 
-func BenchmarkPipelineChained(b *testing.B) {
-	p := stream.PipeMap(
-		stream.Lazy(benchData...).
+func BenchmarkStreamChained(b *testing.B) {
+	s := stream.Map(
+		stream.From(benchData).
 			Filter(func(n int) bool { return n%3 == 0 }).
 			Take(5),
 		func(n int) string { return string(rune('A' + n%26)) },
 	)
 	for b.Loop() {
-		_ = p.ToSlice()
+		_ = s.ToSlice()
 	}
 }
 
@@ -214,12 +177,5 @@ func BenchmarkStreamReduce(b *testing.B) {
 	s := stream.From(benchData)
 	for b.Loop() {
 		_ = s.Reduce(0, func(acc, v int) int { return acc + v })
-	}
-}
-
-func BenchmarkPipelineReduce(b *testing.B) {
-	p := stream.Lazy(benchData...)
-	for b.Loop() {
-		_ = p.Reduce(0, func(acc, v int) int { return acc + v })
 	}
 }
