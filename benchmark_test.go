@@ -24,7 +24,7 @@ func init() {
 // ---------------------------------------------------------------------------
 
 func BenchmarkNativeFilter(b *testing.B) {
-	for b.Loop() {
+	for range b.N {
 		var result []int
 		for _, v := range benchData {
 			if v%2 == 0 {
@@ -37,7 +37,7 @@ func BenchmarkNativeFilter(b *testing.B) {
 
 func BenchmarkStreamFilter(b *testing.B) {
 	s := stream.From(benchData)
-	for b.Loop() {
+	for range b.N {
 		_ = s.Filter(func(n int) bool { return n%2 == 0 }).ToSlice()
 	}
 }
@@ -47,7 +47,7 @@ func BenchmarkStreamFilter(b *testing.B) {
 // ---------------------------------------------------------------------------
 
 func BenchmarkNativeFilterTake(b *testing.B) {
-	for b.Loop() {
+	for range b.N {
 		var result []int
 		for _, v := range benchData {
 			if v%2 == 0 {
@@ -63,7 +63,7 @@ func BenchmarkNativeFilterTake(b *testing.B) {
 
 func BenchmarkStreamFilterTake(b *testing.B) {
 	s := stream.From(benchData)
-	for b.Loop() {
+	for range b.N {
 		_ = s.Filter(func(n int) bool { return n%2 == 0 }).Take(10).ToSlice()
 	}
 }
@@ -73,7 +73,7 @@ func BenchmarkStreamFilterTake(b *testing.B) {
 // ---------------------------------------------------------------------------
 
 func BenchmarkNativeMapFilter(b *testing.B) {
-	for b.Loop() {
+	for range b.N {
 		var result []int
 		for _, v := range benchData {
 			doubled := v * 2
@@ -87,7 +87,7 @@ func BenchmarkNativeMapFilter(b *testing.B) {
 
 func BenchmarkStreamMapFilter(b *testing.B) {
 	s := stream.From(benchData)
-	for b.Loop() {
+	for range b.N {
 		_ = stream.Map(s, func(n int) int { return n * 2 }).
 			Filter(func(n int) bool { return n < 100 }).
 			ToSlice()
@@ -103,7 +103,7 @@ func BenchmarkNativeSort(b *testing.B) {
 	for i := range data {
 		data[i] = 1000 - i
 	}
-	for b.Loop() {
+	for range b.N {
 		cp := make([]int, len(data))
 		copy(cp, data)
 		for i := 1; i < len(cp); i++ {
@@ -121,7 +121,7 @@ func BenchmarkStreamSort(b *testing.B) {
 		data[i] = 1000 - i
 	}
 	s := stream.From(data)
-	for b.Loop() {
+	for range b.N {
 		_ = s.Sort(func(a, b int) int { return a - b }).ToSlice()
 	}
 }
@@ -131,7 +131,7 @@ func BenchmarkStreamSort(b *testing.B) {
 // ---------------------------------------------------------------------------
 
 func BenchmarkNativeChained(b *testing.B) {
-	for b.Loop() {
+	for range b.N {
 		// Filter -> Map -> Take 5
 		var result []string
 		for _, v := range benchData {
@@ -154,7 +154,7 @@ func BenchmarkStreamChained(b *testing.B) {
 			Take(5),
 		func(n int) string { return string(rune('A' + n%26)) },
 	)
-	for b.Loop() {
+	for range b.N {
 		_ = s.ToSlice()
 	}
 }
@@ -164,7 +164,7 @@ func BenchmarkStreamChained(b *testing.B) {
 // ---------------------------------------------------------------------------
 
 func BenchmarkNativeReduce(b *testing.B) {
-	for b.Loop() {
+	for range b.N {
 		sum := 0
 		for _, v := range benchData {
 			sum += v
@@ -175,7 +175,7 @@ func BenchmarkNativeReduce(b *testing.B) {
 
 func BenchmarkStreamReduce(b *testing.B) {
 	s := stream.From(benchData)
-	for b.Loop() {
+	for range b.N {
 		_ = s.Reduce(0, func(acc, v int) int { return acc + v })
 	}
 }

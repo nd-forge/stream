@@ -6,6 +6,10 @@ Go 泛型流处理库。支持链式调用的集合操作：filter、map、sort�
 
 所有操作都是惰性的。需要完整数据的操作（Sort、Reverse、Shuffle、TakeLast、Chunk、Partition）会在内部缓冲，然后自动恢复惰性迭代。
 
+## 要求
+
+- Go 1.23 或更高版本（使用 `iter.Seq[T]` 和 range-over-function）
+
 ## 安装
 
 ```bash

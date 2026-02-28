@@ -6,6 +6,10 @@ Go ジェネリクス対応のストリーム処理ライブラリ。filter, map
 
 全操作は遅延評価です。全データが必要な操作（Sort, Reverse, Shuffle, TakeLast, Chunk, Partition）は内部でバッファリングし、後続の操作は自動的に遅延評価に戻ります。
 
+## 要件
+
+- Go 1.23 以上（`iter.Seq[T]` および range-over-function を使用）
+
 ## インストール
 
 ```bash
