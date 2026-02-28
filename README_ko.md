@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README_ja.md) | [中文](README_zh.md) | **한국어** | [Español](README_es.md) | [Português](README_pt.md)
 
-Go 제네릭 스트림 처리 라이브러리. filter, map, sort, group 등의 컬렉션 연산을 메서드 체이닝으로 작성할 수 있습니다 — 기본적으로 **지연 평가**를 지원합니다.
+Go 제네릭 스트림 처리 라이브러리. filter, map, sort, group 등의 컬렉션 연산을 메서드 체이닝으로 작성할 수 있습니다 — 기본적으로 **지연 평가**를 지원합니다. [온라인에서 사용해보기!](https://go.dev/play/p/QaQ_rdqYn1Y)
 
 모든 연산은 지연 평가됩니다. 전체 데이터가 필요한 연산(Sort, Reverse, Shuffle, TakeLast, Chunk, Partition)은 내부적으로 버퍼링한 후 자동으로 지연 이터레이션을 재개합니다.
 
@@ -172,7 +172,7 @@ type Order struct {
 }
 ```
 
-### Filter, Sort, Take
+### Filter, Sort, Take [[playground]](https://go.dev/play/p/W5fo1cfb_VA)
 
 ```go
 products := stream.Of(
@@ -194,7 +194,7 @@ top3 := products.
     ToSlice()
 ```
 
-### Map과 FlatMap
+### Map과 FlatMap [[playground]](https://go.dev/play/p/GyrjAXMYnZD)
 
 ```go
 // 상품명 추출
@@ -210,7 +210,7 @@ allOrders := stream.FlatMap(
 )
 ```
 
-### GroupBy와 집계
+### GroupBy와 집계 [[playground]](https://go.dev/play/p/nzL3i-4Kgj4)
 
 ```go
 byCategory := stream.GroupBy(products, func(p Product) string { return p.Category })
@@ -221,7 +221,7 @@ for category, group := range byCategory {
 }
 ```
 
-### Partition과 Chunk
+### Partition과 Chunk [[playground]](https://go.dev/play/p/c9KhEbkeKat)
 
 ```go
 // 조건으로 분할
@@ -234,7 +234,7 @@ for _, batch := range batches {
 }
 ```
 
-### Zip
+### Zip [[playground]](https://go.dev/play/p/QUdJ_GonDTa)
 
 ```go
 names := stream.Of("Alice", "Bob", "Charlie")
@@ -244,7 +244,7 @@ pairs := stream.Zip(names, scores).ToSlice()
 // [{Alice 85}, {Bob 92}, {Charlie 78}]
 ```
 
-### 무한 시퀀스
+### 무한 시퀀스 [[playground]](https://go.dev/play/p/9prnIg-NjtF)
 
 ```go
 // 처음 5개의 짝수 자연수
@@ -274,7 +274,7 @@ result := stream.Range(0, 1_000_000).
 // [0, 1000, 2000]
 ```
 
-### iter.Seq 브릿지
+### iter.Seq 브릿지 [[playground]](https://go.dev/play/p/i-rNvVdYut5)
 
 ```go
 // 표준 라이브러리 연동

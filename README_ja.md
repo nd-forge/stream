@@ -2,7 +2,7 @@
 
 [English](README.md) | **日本語** | [中文](README_zh.md) | [한국어](README_ko.md) | [Español](README_es.md) | [Português](README_pt.md)
 
-Go ジェネリクス対応のストリーム処理ライブラリ。filter, map, sort, group などのコレクション操作をメソッドチェーンで記述できます。**デフォルトで遅延評価**。
+Go ジェネリクス対応のストリーム処理ライブラリ。filter, map, sort, group などのコレクション操作をメソッドチェーンで記述できます。**デフォルトで遅延評価**。[オンラインで試す!](https://go.dev/play/p/QaQ_rdqYn1Y)
 
 全操作は遅延評価です。全データが必要な操作（Sort, Reverse, Shuffle, TakeLast, Chunk, Partition）は内部でバッファリングし、後続の操作は自動的に遅延評価に戻ります。
 
@@ -170,7 +170,7 @@ type Order struct {
 }
 ```
 
-### Filter, Sort, Take
+### Filter, Sort, Take [[playground]](https://go.dev/play/p/W5fo1cfb_VA)
 
 ```go
 products := stream.Of(
@@ -192,7 +192,7 @@ top3 := products.
     ToSlice()
 ```
 
-### Map と FlatMap
+### Map と FlatMap [[playground]](https://go.dev/play/p/GyrjAXMYnZD)
 
 ```go
 // 商品名の抽出
@@ -208,7 +208,7 @@ allOrders := stream.FlatMap(
 )
 ```
 
-### GroupBy と集計
+### GroupBy と集計 [[playground]](https://go.dev/play/p/nzL3i-4Kgj4)
 
 ```go
 byCategory := stream.GroupBy(products, func(p Product) string { return p.Category })
@@ -219,7 +219,7 @@ for category, group := range byCategory {
 }
 ```
 
-### Partition と Chunk
+### Partition と Chunk [[playground]](https://go.dev/play/p/c9KhEbkeKat)
 
 ```go
 // 条件で分割
@@ -232,7 +232,7 @@ for _, batch := range batches {
 }
 ```
 
-### Zip
+### Zip [[playground]](https://go.dev/play/p/QUdJ_GonDTa)
 
 ```go
 names := stream.Of("Alice", "Bob", "Charlie")
@@ -242,7 +242,7 @@ pairs := stream.Zip(names, scores).ToSlice()
 // [{Alice 85}, {Bob 92}, {Charlie 78}]
 ```
 
-### 無限シーケンス
+### 無限シーケンス [[playground]](https://go.dev/play/p/9prnIg-NjtF)
 
 ```go
 // 最初の5つの偶数
@@ -272,7 +272,7 @@ result := stream.Range(0, 1_000_000).
 // [0, 1000, 2000]
 ```
 
-### iter.Seq ブリッジ
+### iter.Seq ブリッジ [[playground]](https://go.dev/play/p/i-rNvVdYut5)
 
 ```go
 // 標準ライブラリとの連携

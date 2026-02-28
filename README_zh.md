@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README_ja.md) | **中文** | [한국어](README_ko.md) | [Español](README_es.md) | [Português](README_pt.md)
 
-Go 泛型流处理库。支持链式调用的集合操作：filter、map、sort、group 等 — 默认采用**惰性求值**。
+Go 泛型流处理库。支持链式调用的集合操作：filter、map、sort、group 等 — 默认采用**惰性求值**。[在线试用!](https://go.dev/play/p/QaQ_rdqYn1Y)
 
 所有操作都是惰性的。需要完整数据的操作（Sort、Reverse、Shuffle、TakeLast、Chunk、Partition）会在内部缓冲，然后自动恢复惰性迭代。
 
@@ -172,7 +172,7 @@ type Order struct {
 }
 ```
 
-### Filter, Sort, Take
+### Filter, Sort, Take [[playground]](https://go.dev/play/p/W5fo1cfb_VA)
 
 ```go
 products := stream.Of(
@@ -194,7 +194,7 @@ top3 := products.
     ToSlice()
 ```
 
-### Map 和 FlatMap
+### Map 和 FlatMap [[playground]](https://go.dev/play/p/GyrjAXMYnZD)
 
 ```go
 // 提取商品名称
@@ -210,7 +210,7 @@ allOrders := stream.FlatMap(
 )
 ```
 
-### GroupBy 和聚合
+### GroupBy 和聚合 [[playground]](https://go.dev/play/p/nzL3i-4Kgj4)
 
 ```go
 byCategory := stream.GroupBy(products, func(p Product) string { return p.Category })
@@ -221,7 +221,7 @@ for category, group := range byCategory {
 }
 ```
 
-### Partition 和 Chunk
+### Partition 和 Chunk [[playground]](https://go.dev/play/p/c9KhEbkeKat)
 
 ```go
 // 按条件分割
@@ -234,7 +234,7 @@ for _, batch := range batches {
 }
 ```
 
-### Zip
+### Zip [[playground]](https://go.dev/play/p/QUdJ_GonDTa)
 
 ```go
 names := stream.Of("Alice", "Bob", "Charlie")
@@ -244,7 +244,7 @@ pairs := stream.Zip(names, scores).ToSlice()
 // [{Alice 85}, {Bob 92}, {Charlie 78}]
 ```
 
-### 无限序列
+### 无限序列 [[playground]](https://go.dev/play/p/9prnIg-NjtF)
 
 ```go
 // 前5个偶数自然数
@@ -274,7 +274,7 @@ result := stream.Range(0, 1_000_000).
 // [0, 1000, 2000]
 ```
 
-### iter.Seq 桥接
+### iter.Seq 桥接 [[playground]](https://go.dev/play/p/i-rNvVdYut5)
 
 ```go
 // 标准库互操作
