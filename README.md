@@ -5,10 +5,11 @@
 [![coverage](https://img.shields.io/badge/coverage-100.0%25-brightgreen)](https://github.com/nd-forge/stream/actions/workflows/check-code.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nd-forge/stream)](https://goreportcard.com/report/github.com/nd-forge/stream)
 [![Go Version](https://img.shields.io/badge/Go-%3E%3D1.23-blue)](https://go.dev/)
+[![Go Playground](https://img.shields.io/badge/Go-Playground-00ADD8?logo=go&logoColor=white)](https://go.dev/play/p/QaQ_rdqYn1Y)
 
 **English** | [日本語](README_ja.md) | [中文](README_zh.md) | [한국어](README_ko.md) | [Español](README_es.md) | [Português](README_pt.md)
 
-A Go generic stream processing library. Chainable collection operations for filter, map, sort, group, and more — with **lazy evaluation** by default.
+A Go generic stream processing library. Chainable collection operations for filter, map, sort, group, and more — with **lazy evaluation** by default. [Try it online!](https://go.dev/play/p/QaQ_rdqYn1Y)
 
 All operations are lazy. Operations that require full data (Sort, Reverse, Shuffle, TakeLast, Chunk, Partition) buffer internally and resume lazy iteration automatically.
 
@@ -178,7 +179,7 @@ type Order struct {
 }
 ```
 
-### Filter, Sort, Take
+### Filter, Sort, Take [[playground]](https://go.dev/play/p/W5fo1cfb_VA)
 
 ```go
 products := stream.Of(
@@ -200,7 +201,7 @@ top3 := products.
     ToSlice()
 ```
 
-### Map and FlatMap
+### Map and FlatMap [[playground]](https://go.dev/play/p/GyrjAXMYnZD)
 
 ```go
 // Extract product names
@@ -216,7 +217,7 @@ allOrders := stream.FlatMap(
 )
 ```
 
-### GroupBy and Aggregate
+### GroupBy and Aggregate [[playground]](https://go.dev/play/p/nzL3i-4Kgj4)
 
 ```go
 byCategory := stream.GroupBy(products, func(p Product) string { return p.Category })
@@ -227,7 +228,7 @@ for category, group := range byCategory {
 }
 ```
 
-### Partition and Chunk
+### Partition and Chunk [[playground]](https://go.dev/play/p/c9KhEbkeKat)
 
 ```go
 // Split by condition
@@ -240,7 +241,7 @@ for _, batch := range batches {
 }
 ```
 
-### Zip
+### Zip [[playground]](https://go.dev/play/p/QUdJ_GonDTa)
 
 ```go
 names := stream.Of("Alice", "Bob", "Charlie")
@@ -250,7 +251,7 @@ pairs := stream.Zip(names, scores).ToSlice()
 // [{Alice 85}, {Bob 92}, {Charlie 78}]
 ```
 
-### Infinite Sequences
+### Infinite Sequences [[playground]](https://go.dev/play/p/9prnIg-NjtF)
 
 ```go
 // First 5 even natural numbers
@@ -280,7 +281,7 @@ result := stream.Range(0, 1_000_000).
 // [0, 1000, 2000]
 ```
 
-### iter.Seq Bridge
+### iter.Seq Bridge [[playground]](https://go.dev/play/p/i-rNvVdYut5)
 
 ```go
 // Standard library interop

@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README_ja.md) | [中文](README_zh.md) | [한국어](README_ko.md) | **Español** | [Português](README_pt.md)
 
-Una biblioteca generica de procesamiento de streams para Go. Operaciones encadenables sobre colecciones: filter, map, sort, group y mas — con **evaluacion lazy** por defecto.
+Una biblioteca generica de procesamiento de streams para Go. Operaciones encadenables sobre colecciones: filter, map, sort, group y mas — con **evaluacion lazy** por defecto. [Probar en linea!](https://go.dev/play/p/QaQ_rdqYn1Y)
 
 Todas las operaciones son lazy. Las operaciones que requieren todos los datos (Sort, Reverse, Shuffle, TakeLast, Chunk, Partition) almacenan internamente en buffer y reanudan la iteracion lazy automaticamente.
 
@@ -172,7 +172,7 @@ type Order struct {
 }
 ```
 
-### Filter, Sort, Take
+### Filter, Sort, Take [[playground]](https://go.dev/play/p/W5fo1cfb_VA)
 
 ```go
 products := stream.Of(
@@ -194,7 +194,7 @@ top3 := products.
     ToSlice()
 ```
 
-### Map y FlatMap
+### Map y FlatMap [[playground]](https://go.dev/play/p/GyrjAXMYnZD)
 
 ```go
 // Extraer nombres de productos
@@ -210,7 +210,7 @@ allOrders := stream.FlatMap(
 )
 ```
 
-### GroupBy y agregacion
+### GroupBy y agregacion [[playground]](https://go.dev/play/p/nzL3i-4Kgj4)
 
 ```go
 byCategory := stream.GroupBy(products, func(p Product) string { return p.Category })
@@ -221,7 +221,7 @@ for category, group := range byCategory {
 }
 ```
 
-### Partition y Chunk
+### Partition y Chunk [[playground]](https://go.dev/play/p/c9KhEbkeKat)
 
 ```go
 // Dividir por condicion
@@ -234,7 +234,7 @@ for _, batch := range batches {
 }
 ```
 
-### Zip
+### Zip [[playground]](https://go.dev/play/p/QUdJ_GonDTa)
 
 ```go
 names := stream.Of("Alice", "Bob", "Charlie")
@@ -244,7 +244,7 @@ pairs := stream.Zip(names, scores).ToSlice()
 // [{Alice 85}, {Bob 92}, {Charlie 78}]
 ```
 
-### Secuencias infinitas
+### Secuencias infinitas [[playground]](https://go.dev/play/p/9prnIg-NjtF)
 
 ```go
 // Primeros 5 numeros pares naturales
@@ -274,7 +274,7 @@ result := stream.Range(0, 1_000_000).
 // [0, 1000, 2000]
 ```
 
-### Puente iter.Seq
+### Puente iter.Seq [[playground]](https://go.dev/play/p/i-rNvVdYut5)
 
 ```go
 // Interoperabilidad con biblioteca estandar
