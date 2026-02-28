@@ -6,6 +6,10 @@ Go 제네릭 스트림 처리 라이브러리. filter, map, sort, group 등의 �
 
 모든 연산은 지연 평가됩니다. 전체 데이터가 필요한 연산(Sort, Reverse, Shuffle, TakeLast, Chunk, Partition)은 내부적으로 버퍼링한 후 자동으로 지연 이터레이션을 재개합니다.
 
+## 요구 사항
+
+- Go 1.23 이상 (`iter.Seq[T]` 및 range-over-function 사용)
+
 ## 설치
 
 ```bash

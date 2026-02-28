@@ -6,6 +6,10 @@ Una biblioteca generica de procesamiento de streams para Go. Operaciones encaden
 
 Todas las operaciones son lazy. Las operaciones que requieren todos los datos (Sort, Reverse, Shuffle, TakeLast, Chunk, Partition) almacenan internamente en buffer y reanudan la iteracion lazy automaticamente.
 
+## Requisitos
+
+- Go 1.23 o superior (usa `iter.Seq[T]` y range-over-function)
+
 ## Instalacion
 
 ```bash

@@ -1,6 +1,6 @@
 module github.com/nd-forge/stream/benchmark
 
-go 1.25
+go 1.23
 
 replace github.com/nd-forge/stream => ../
 

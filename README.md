@@ -4,12 +4,17 @@
 [![CI](https://github.com/nd-forge/stream/actions/workflows/check-code.yml/badge.svg)](https://github.com/nd-forge/stream/actions/workflows/check-code.yml)
 [![coverage](https://img.shields.io/badge/coverage-100.0%25-brightgreen)](https://github.com/nd-forge/stream/actions/workflows/check-code.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/nd-forge/stream)](https://goreportcard.com/report/github.com/nd-forge/stream)
+[![Go Version](https://img.shields.io/badge/Go-%3E%3D1.23-blue)](https://go.dev/)
 
 **English** | [日本語](README_ja.md) | [中文](README_zh.md) | [한국어](README_ko.md) | [Español](README_es.md) | [Português](README_pt.md)
 
 A Go generic stream processing library. Chainable collection operations for filter, map, sort, group, and more — with **lazy evaluation** by default.
 
 All operations are lazy. Operations that require full data (Sort, Reverse, Shuffle, TakeLast, Chunk, Partition) buffer internally and resume lazy iteration automatically.
+
+## Requirements
+
+- Go 1.23 or later (uses `iter.Seq[T]` and range-over-function)
 
 ## Install
 
